@@ -1,4 +1,4 @@
-import type { AlertEvent, Decision, TradePlan } from '@/core/domain/trading';
+import type { AlertEvent, Decision, PriceZone, TradePlan } from '@/core/domain/trading';
 import type { MonitorRule } from '@/core/monitoring/agent';
 
 function event(
@@ -19,6 +19,25 @@ function event(
     createdAt: new Date().toISOString(),
     metadata: { dedupKey },
   };
+}
+
+function fmt(value: number | undefined): string | undefined {
+  return value === undefined || !Number.isFinite(value) ? undefined : value.toFixed(2);
+}
+
+function fmtZone(label: string, zone: PriceZone | undefined): string | undefined {
+  if (!zone) return undefined;
+  return `${label} ${zone.low.toFixed(2)}–${zone.high.toFixed(2)}`;
+}
+
+function tradeLevels(plan: TradePlan): string {
+  const parts = [
+    fmtZone('Entry A', plan.entryA),
+    fmtZone('Entry B', plan.entryB),
+    fmt(plan.stop) ? `Stop ${fmt(plan.stop)}` : undefined,
+    ...plan.targets.slice(0, 2).map((target, index) => `TP${index + 1} ${target.toFixed(2)}`),
+  ].filter((value): value is string => Boolean(value));
+  return parts.length ? ` Niveles: ${parts.join(' · ')}.` : '';
 }
 
 const actionableDecision: Partial<Record<Decision, {
@@ -63,7 +82,7 @@ export const decisionSignalRule: MonitorRule = {
       plan,
       'DECISION_SIGNAL',
       `${plan.symbol} · ${signal.label}`,
-      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}`,
+      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}${tradeLevels(plan)}`,
       signal.severity,
       `${plan.symbol}:DECISION_SIGNAL:${plan.decision}:${convictionBucket}`,
     );
@@ -80,7 +99,7 @@ export const entryZoneRule: MonitorRule = {
       plan,
       'ENTRY_ZONE',
       `${plan.symbol} entró en zona de entrada`,
-      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.`,
+      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.${tradeLevels(plan)}`,
       'OPPORTUNITY',
       `${plan.symbol}:ENTRY_ZONE:${active.low.toFixed(4)}:${active.high.toFixed(4)}`,
     );
@@ -95,7 +114,7 @@ export const stopBreachRule: MonitorRule = {
       plan,
       'STOP_BREACH',
       `${plan.symbol} perdió el stop técnico`,
-      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.`,
+      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.${tradeLevels(plan)}`,
       'CRITICAL',
       `${plan.symbol}:STOP_BREACH:${plan.stop.toFixed(4)}`,
     );
@@ -113,7 +132,7 @@ export const targetHitRule: MonitorRule = {
       plan,
       'TARGET_HIT',
       `${plan.symbol} alcanzó TP${reachedIndex + 1}`,
-      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.`,
+      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.${tradeLevels(plan)}`,
       'ACTION',
       `${plan.symbol}:TARGET_HIT:${reachedIndex + 1}:${target.toFixed(4)}`,
     );

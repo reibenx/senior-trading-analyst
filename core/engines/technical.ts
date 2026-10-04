@@ -1,5 +1,13 @@
-import type { OHLCVBar, TechnicalSnapshot, Timeframe, LineOverlay, ZoneOverlay } from '@/core/domain/market';
-import { atr, ema, recentPivotHighs, recentPivotLows, rsi } from '@/core/engines/indicators';
+import type { IndicatorPoint, OHLCVBar, TechnicalSnapshot, Timeframe, LineOverlay, ZoneOverlay } from '@/core/domain/market';
+import {
+  atr,
+  ema,
+  recentPivotHighPoints,
+  recentPivotHighs,
+  recentPivotLowPoints,
+  recentPivotLows,
+  rsi,
+} from '@/core/engines/indicators';
 
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
@@ -27,6 +35,33 @@ function detectTrend(currentPrice: number, ema50?: number, ema200?: number): Tec
   if (ema50 !== undefined && ema200 !== undefined && currentPrice > ema50 && ema50 > ema200) return 'BULL';
   if (ema50 !== undefined && ema200 !== undefined && currentPrice < ema50 && ema50 < ema200) return 'BEAR';
   return 'NEUTRAL';
+}
+
+function projectedTrendline(
+  bars: OHLCVBar[],
+  points: IndicatorPoint[],
+  id: string,
+  label: string,
+): LineOverlay | undefined {
+  if (points.length < 2) return undefined;
+  const from = points[points.length - 2];
+  const pivotTo = points[points.length - 1];
+  const fromIndex = bars.findIndex((bar) => bar.time === from.time);
+  const pivotToIndex = bars.findIndex((bar) => bar.time === pivotTo.time);
+  const latestIndex = bars.length - 1;
+  if (fromIndex < 0 || pivotToIndex <= fromIndex || latestIndex <= pivotToIndex) return undefined;
+
+  const slope = (pivotTo.value - from.value) / (pivotToIndex - fromIndex);
+  const projectedValue = pivotTo.value + slope * (latestIndex - pivotToIndex);
+
+  return {
+    id,
+    kind: 'trendline',
+    label,
+    from: { time: from.time, value: round(from.value) },
+    to: { time: bars[latestIndex].time, value: round(projectedValue) },
+    meta: { pivotTime: pivotTo.time, pivotValue: round(pivotTo.value), slopePerBar: slope },
+  };
 }
 
 export interface TechnicalAnalysisInput {
@@ -57,6 +92,8 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
     .sort((a, b) => a - b)
     .slice(0, 3);
 
+  const lowPivots = recentPivotLowPoints(bars, 3, 4);
+  const highPivots = recentPivotHighPoints(bars, 3, 4);
   const structure = detectStructure(bars);
   const trend = detectTrend(currentPrice, ema50, ema200);
 
@@ -67,6 +104,11 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
 
   supportLevels.forEach((value, index) => overlays.push({ id: `support-${index}`, kind: 'support', label: `S${index + 1}`, value: round(value) }));
   resistanceLevels.forEach((value, index) => overlays.push({ id: `resistance-${index}`, kind: 'resistance', label: `R${index + 1}`, value: round(value) }));
+
+  const supportTrendline = projectedTrendline(bars, lowPivots, 'trend-support', 'Trendline soporte');
+  const resistanceTrendline = projectedTrendline(bars, highPivots, 'trend-resistance', 'Trendline resistencia');
+  if (supportTrendline) overlays.push(supportTrendline);
+  if (resistanceTrendline) overlays.push(resistanceTrendline);
 
   const referenceSupport = supportLevels[0] ?? ema50 ?? ema20 ?? currentPrice * 0.96;
   const volatility = atr14 ?? currentPrice * 0.025;

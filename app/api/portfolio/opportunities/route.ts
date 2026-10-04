@@ -4,6 +4,7 @@ import type { PortfolioOpportunitySummary } from '@/core/domain/opportunity';
 import type { Position, Strategy } from '@/core/domain/trading';
 import type { Timeframe } from '@/core/domain/market';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
+import { buildMonthlyAllocationPlan } from '@/core/engines/monthly-allocation';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
@@ -11,6 +12,8 @@ import { buildTradePlan } from '@/core/services/build-trade-plan';
 const requestSchema = z.object({
   strategy: z.enum(['day', 'swing', 'position']).default('position'),
   maxSymbols: z.number().int().min(1).max(50).default(25),
+  monthlyCapital: z.number().nonnegative().max(10000000).optional(),
+  maxAllocationIdeas: z.number().int().min(1).max(8).default(4),
   symbols: z.array(z.string().trim().min(1).max(20)).max(50).optional(),
 });
 
@@ -73,6 +76,9 @@ export async function POST(request: Request) {
       analyzed: opportunities.length,
       failed: errors.length,
       opportunities,
+      allocationPlan: payload.monthlyCapital !== undefined
+        ? buildMonthlyAllocationPlan(opportunities, payload.monthlyCapital, payload.maxAllocationIdeas)
+        : undefined,
       errors,
     };
 

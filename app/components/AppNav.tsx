@@ -6,7 +6,7 @@ export function AppNav() {
       <Link href="/">Analizar ticker</Link>
       <Link href="/portfolio">Mi Cartera IOL</Link>
       <Link href="/opportunities">Oportunidades</Link>
-      <Link href="/activity">Alertas</Link>
+      <Link href="/alerts">Alertas</Link>
       <Link href="/market">Mercado</Link>
       <Link href="/sandbox">Sandbox</Link>
       <Link href="/system">Estado del sistema</Link>

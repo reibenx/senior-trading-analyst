@@ -1,4 +1,5 @@
 import type { AlertEvent } from '@/core/domain/trading';
+import { getRedisRestConfig } from '@/core/persistence/redis-env';
 
 export interface AlertStateStore {
   acquire(event: AlertEvent, ttlSeconds: number): Promise<boolean>;
@@ -33,8 +34,7 @@ export class UpstashAlertStateStore implements AlertStateStore {
 }
 
 export function getAlertStateStore(): AlertStateStore | null {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!restUrl || !token) return null;
-  return new UpstashAlertStateStore(restUrl, token);
+  const redis = getRedisRestConfig();
+  if (!redis) return null;
+  return new UpstashAlertStateStore(redis.restUrl, redis.token);
 }

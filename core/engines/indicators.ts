@@ -48,6 +48,23 @@ export function rsi(values: number[], period = 14): number | undefined {
   return 100 - 100 / (1 + rs);
 }
 
+export function vwap(bars: OHLCVBar[], period = 20): number | undefined {
+  if (period <= 0 || bars.length < period) return undefined;
+  const slice = bars.slice(-period);
+  let priceVolume = 0;
+  let volume = 0;
+
+  for (const bar of slice) {
+    const typicalPrice = (bar.high + bar.low + bar.close) / 3;
+    const barVolume = Math.max(0, bar.volume);
+    priceVolume += typicalPrice * barVolume;
+    volume += barVolume;
+  }
+
+  if (volume <= 0) return undefined;
+  return priceVolume / volume;
+}
+
 function pivotLowPointsChronological(bars: OHLCVBar[], window: number): IndicatorPoint[] {
   const pivots: IndicatorPoint[] = [];
   for (let i = window; i < bars.length - window; i += 1) {

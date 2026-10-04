@@ -1,10 +1,24 @@
 import type { FundamentalDataProvider } from '@/core/adapters/contracts';
 import type { FundamentalSnapshot } from '@/core/domain/fundamentals';
 
+interface FundamentalCacheEntry {
+  expiresAt: number;
+  snapshot: FundamentalSnapshot;
+}
+
+const fundamentalsCache = new Map<string, FundamentalCacheEntry>();
+const inFlight = new Map<string, Promise<FundamentalSnapshot>>();
+
 function parseOptionalNumber(value: unknown): number | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function cacheTtlMs() {
+  const configuredHours = Number(process.env.ALPHA_VANTAGE_CACHE_TTL_HOURS ?? '12');
+  const hours = Number.isFinite(configuredHours) && configuredHours >= 1 ? configuredHours : 12;
+  return Math.min(hours, 48) * 60 * 60 * 1000;
 }
 
 export class AlphaVantageFundamentalProvider implements FundamentalDataProvider {
@@ -15,6 +29,27 @@ export class AlphaVantageFundamentalProvider implements FundamentalDataProvider 
   }
 
   async getFundamentals(symbol: string): Promise<FundamentalSnapshot> {
+    const normalizedSymbol = symbol.trim().toUpperCase();
+    const cached = fundamentalsCache.get(normalizedSymbol);
+    if (cached && cached.expiresAt > Date.now()) return cached.snapshot;
+
+    const existing = inFlight.get(normalizedSymbol);
+    if (existing) return existing;
+
+    const task = this.fetchFundamentals(normalizedSymbol)
+      .then((snapshot) => {
+        fundamentalsCache.set(normalizedSymbol, { snapshot, expiresAt: Date.now() + cacheTtlMs() });
+        return snapshot;
+      })
+      .finally(() => {
+        inFlight.delete(normalizedSymbol);
+      });
+
+    inFlight.set(normalizedSymbol, task);
+    return task;
+  }
+
+  private async fetchFundamentals(symbol: string): Promise<FundamentalSnapshot> {
     const params = new URLSearchParams({ function: 'OVERVIEW', symbol, apikey: this.apiKey });
     const response = await fetch(`https://www.alphavantage.co/query?${params.toString()}`, {
       cache: 'no-store',

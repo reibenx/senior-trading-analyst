@@ -1,6 +1,7 @@
 import type { AlertEvent, TradePlan } from '../domain/trading';
 import type { NotificationProvider } from '../adapters/contracts';
 import type { AlertStateStore } from './state-store';
+import { appendActivity } from '../persistence/activity-store';
 
 export interface MonitorRule {
   id: string;
@@ -28,6 +29,15 @@ export class MonitoringAgent {
       }
 
       await Promise.allSettled(this.notifications.map((provider) => provider.send(event)));
+      await appendActivity({
+        kind: 'ALERT',
+        symbol: event.symbol,
+        title: `${event.type} · ${event.symbol}`,
+        detail: event.message,
+        severity: event.severity,
+        metadata: event.metadata,
+        createdAt: event.createdAt,
+      }).catch((error) => console.error('[ACTIVITY_STORE_ERROR]', error));
       events.push(event);
     }
 

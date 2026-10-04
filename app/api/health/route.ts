@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getExecutionPolicy } from '@/core/execution/execution-policy';
+import { getRedisRestConfig } from '@/core/persistence/redis-env';
 
 function configured(...names: string[]) {
   return names.every((name) => Boolean(process.env[name]?.trim()));
@@ -10,7 +11,8 @@ export async function GET() {
   const ratioMode = process.env.CEDEAR_RATIO_PROVIDER?.trim().toLowerCase() || 'auto';
   const directIol = configured('IOL_API_USERNAME', 'IOL_API_PASSWORD');
   const bridgeIol = configured('IOL_BRIDGE_URL');
-  const redisReady = configured('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN');
+  const redis = getRedisRestConfig();
+  const redisReady = Boolean(redis);
   const metadataBridge = Boolean(
     process.env.IOL_ASSET_METADATA_BRIDGE_URL?.trim()
     || process.env.IOL_BRIDGE_URL?.trim(),
@@ -63,7 +65,7 @@ export async function GET() {
     },
     activityHistory: {
       ready: redisReady,
-      mode: redisReady ? 'redis-rest' : 'unconfigured',
+      mode: redisReady ? `redis-rest:${redis?.source}` : 'unconfigured',
       purpose: 'bounded history of alerts and sandbox/order audit events',
     },
     cedearConversion: {
@@ -72,7 +74,7 @@ export async function GET() {
       impliedCableCcl: directIol && metadataBridge,
       globalCclBenchmark: configured('CCL_BRIDGE_URL'),
     },
-    alertState: { ready: redisReady },
+    alertState: { ready: redisReady, mode: redisReady ? redis?.source : 'unconfigured' },
     telegram: { ready: configured('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID') },
     whatsapp: { ready: configured('WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_RECIPIENT') },
     monitorCron: { ready: configured('MONITOR_CRON_TOKEN') },

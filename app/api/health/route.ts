@@ -8,9 +8,14 @@ export async function GET() {
   const marketDataProvider = process.env.MARKET_DATA_PROVIDER?.trim() || 'auto';
   const directIol = configured('IOL_API_USERNAME', 'IOL_API_PASSWORD');
   const bridgeIol = configured('IOL_BRIDGE_URL');
+  const metadataBridge = Boolean(
+    process.env.IOL_ASSET_METADATA_BRIDGE_URL?.trim()
+    || process.env.IOL_BRIDGE_URL?.trim(),
+  );
   const allInOneCedear = configured('CEDEAR_CONVERSION_BRIDGE_URL');
-  const compositeCedear = configured('CEDEAR_RATIO_BRIDGE_URL')
-    && Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
+  const quoteAvailable = directIol
+    || Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
+  const compositeCedear = configured('CEDEAR_RATIO_BRIDGE_URL') && quoteAvailable;
 
   const modules = {
     appAuth: configured('APP_ACCESS_USER', 'APP_ACCESS_PASSWORD'),
@@ -22,6 +27,15 @@ export async function GET() {
       ready: directIol || bridgeIol,
       mode: directIol ? 'direct-api' : bridgeIol ? 'bridge' : 'unconfigured',
     },
+    iolQuotes: {
+      ready: quoteAvailable,
+      mode: directIol ? 'direct-api' : quoteAvailable ? 'bridge' : 'unconfigured',
+    },
+    iolAssetMetadata: {
+      ready: metadataBridge,
+      mode: metadataBridge ? 'bridge' : 'unconfigured',
+      purpose: 'explicit ARS/D/cable related symbols',
+    },
     iolOrders: {
       ready: Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()),
       mode: process.env.IOL_ORDER_BRIDGE_URL?.trim() ? 'dedicated-bridge' : bridgeIol ? 'bridge' : 'unconfigured',
@@ -29,7 +43,8 @@ export async function GET() {
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,
       mode: allInOneCedear ? 'all-in-one' : compositeCedear ? 'composite' : 'unconfigured',
-      globalCclFallback: configured('CCL_BRIDGE_URL'),
+      impliedCableCcl: directIol && metadataBridge,
+      globalCclBenchmark: configured('CCL_BRIDGE_URL'),
     },
     alertState: { ready: configured('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN') },
     telegram: { ready: configured('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID') },

@@ -1,4 +1,4 @@
-import type { LocalQuoteProvider, LocalQuoteRecord } from '@/core/providers/cedear-conversion-bridge';
+import type { LocalQuoteProvider, LocalQuoteRecord } from '@/core/providers/cedear-provider-contracts';
 import { getIolApiClient, type IolApiClient } from '@/core/providers/iol-api-client';
 
 interface IolQuoteResponse {

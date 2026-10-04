@@ -8,12 +8,14 @@ export interface ExecutionPolicy {
   reason?: string;
 }
 
+type EnvLike = Record<string, string | undefined>;
+
 function normalizedMode(value: string | undefined): ExecutionMode {
   if (value === 'sandbox' || value === 'production') return value;
   return 'disabled';
 }
 
-export function getExecutionPolicy(env: NodeJS.ProcessEnv = process.env): ExecutionPolicy {
+export function getExecutionPolicy(env: EnvLike = process.env): ExecutionPolicy {
   const mode = normalizedMode(env.IOL_EXECUTION_MODE?.trim().toLowerCase());
 
   if (mode === 'disabled') {

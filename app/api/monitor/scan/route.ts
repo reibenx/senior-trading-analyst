@@ -3,6 +3,7 @@ import type { Strategy } from '@/core/domain/trading';
 import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
+import { getAlertStateStore } from '@/core/monitoring/state-store';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
 import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
@@ -53,6 +54,11 @@ function dedupeTargets(targets: ScanTarget[]): ScanTarget[] {
   return [...map.values()];
 }
 
+function alertTtlSeconds(): number {
+  const configured = Number(process.env.ALERT_DEDUP_TTL_SECONDS ?? 86400);
+  return Number.isFinite(configured) ? Math.max(300, Math.min(604800, Math.floor(configured))) : 86400;
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -72,7 +78,8 @@ export async function POST(request: Request) {
   const scanTargets = targets.slice(0, maxSymbols);
 
   const providers = getNotificationProviders();
-  const agent = new MonitoringAgent(defaultMonitorRules, providers);
+  const stateStore = getAlertStateStore();
+  const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds());
   const results: Array<Record<string, unknown>> = [];
 
   for (const target of scanTargets) {
@@ -112,6 +119,7 @@ export async function POST(request: Request) {
     scanned: scanTargets.length,
     portfolioPositions: positions.length,
     notificationProviders: providers.map((provider) => provider.id),
+    persistentDeduplication: Boolean(stateStore),
     results,
   });
 }

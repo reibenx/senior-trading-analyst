@@ -1,9 +1,10 @@
 import type { AlertEvent, Position } from '@/core/domain/trading';
 import type { LineOverlay, ZoneOverlay } from '@/core/domain/market';
+import type { FundamentalSnapshot } from '@/core/domain/fundamentals';
 
 export interface FundamentalDataProvider {
   id: string;
-  getFundamentals(symbol: string): Promise<Record<string, number | string | null>>;
+  getFundamentals(symbol: string): Promise<FundamentalSnapshot>;
 }
 
 export interface BrokerAdapter {

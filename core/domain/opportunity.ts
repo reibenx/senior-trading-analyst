@@ -49,8 +49,11 @@ export interface PortfolioOpportunitySummary {
   generatedAt: string;
   strategy: Strategy;
   portfolioValue: number;
+  requested?: number;
+  batchLimit?: number;
   analyzed: number;
   failed: number;
+  deferred?: string[];
   opportunities: PortfolioOpportunity[];
   allocationPlan?: MonthlyAllocationPlan;
   errors: Array<{ symbol: string; error: string }>;

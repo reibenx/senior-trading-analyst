@@ -18,6 +18,11 @@ function authHeaders(token?: string): HeadersInit | undefined {
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
+function pctDeviation(value: number, reference: number): number {
+  if (reference <= 0) return Number.POSITIVE_INFINITY;
+  return Math.abs((value - reference) / reference) * 100;
+}
+
 export class CedearConversionBridgeProvider implements CedearConversionProvider {
   readonly id = 'cedear-conversion-bridge';
 
@@ -108,7 +113,7 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
     const [ratios, quotes, globalCcl] = await Promise.all([
       this.ratios.getRatios(normalized),
       this.quotes.getQuotes(normalized),
-      this.ccl ? this.ccl.getCcl() : Promise.resolve(undefined),
+      this.ccl ? this.ccl.getCcl().catch(() => undefined) : Promise.resolve(undefined),
     ]);
 
     const ratioMap = new Map(ratios.map((item) => [item.symbol.toUpperCase(), item]));
@@ -117,28 +122,40 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
     return normalized.flatMap((symbol) => {
       const ratio = ratioMap.get(symbol);
       const quote = quoteMap.get(symbol);
-      const cclValue = quote?.impliedCclArsPerUsd && quote.impliedCclArsPerUsd > 0
+      const impliedCcl = quote?.impliedCclArsPerUsd && quote.impliedCclArsPerUsd > 0
         ? quote.impliedCclArsPerUsd
-        : globalCcl?.cclArsPerUsd;
+        : undefined;
+      const cclValue = impliedCcl ?? globalCcl?.cclArsPerUsd;
       if (!ratio || !quote || !cclValue) return [];
 
+      const usingImplied = impliedCcl !== undefined;
+      const benchmarkDeviation = usingImplied && globalCcl?.cclArsPerUsd
+        ? pctDeviation(impliedCcl, globalCcl.cclArsPerUsd)
+        : undefined;
+
       const timestamps = [ratio.updatedAt, quote.quoteTimestamp];
-      if (globalCcl?.updatedAt && !quote.impliedCclArsPerUsd) timestamps.push(globalCcl.updatedAt);
+      if (globalCcl?.updatedAt && !usingImplied) timestamps.push(globalCcl.updatedAt);
       const oldestTimestamp = [...timestamps].sort()[0] ?? quote.quoteTimestamp;
-      const cclSource = quote.impliedCclArsPerUsd ? `${quote.source}:implied-cable` : globalCcl?.source ?? 'unknown-ccl';
+      const cclSourceDescription = usingImplied
+        ? `${quote.source}:implied-cable`
+        : globalCcl?.source ?? 'unknown-ccl';
 
       return [{
         symbol,
         underlyingSymbol: ratio.underlyingSymbol,
         cedearsPerUnderlyingShare: ratio.cedearsPerUnderlyingShare,
         cclArsPerUsd: cclValue,
+        benchmarkCclArsPerUsd: globalCcl?.cclArsPerUsd,
+        cclBenchmarkDeviationPercent: benchmarkDeviation,
+        cclSource: usingImplied ? 'IMPLIED_CABLE' : 'GLOBAL_BENCHMARK',
+        cableSymbol: quote.cableSymbol,
         localPriceArs: quote.localPriceArs,
         localBidArs: quote.localBidArs,
         localAskArs: quote.localAskArs,
         marketStatus: quote.marketStatus,
         quoteTimestamp: quote.quoteTimestamp,
         updatedAt: oldestTimestamp,
-        source: `${ratio.source}+${quote.source}+${cclSource}`,
+        source: `${ratio.source}+${quote.source}+${cclSourceDescription}`,
       } satisfies CedearConversion];
     });
   }

@@ -7,6 +7,7 @@ function configured(...names: string[]) {
 
 export async function GET() {
   const marketDataProvider = process.env.MARKET_DATA_PROVIDER?.trim() || 'auto';
+  const ratioMode = process.env.CEDEAR_RATIO_PROVIDER?.trim().toLowerCase() || 'auto';
   const directIol = configured('IOL_API_USERNAME', 'IOL_API_PASSWORD');
   const bridgeIol = configured('IOL_BRIDGE_URL');
   const metadataBridge = Boolean(
@@ -16,7 +17,10 @@ export async function GET() {
   const allInOneCedear = configured('CEDEAR_CONVERSION_BRIDGE_URL');
   const quoteAvailable = directIol
     || Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
-  const compositeCedear = configured('CEDEAR_RATIO_BRIDGE_URL') && quoteAvailable;
+  const ratioReady = ratioMode === 'bridge'
+    ? configured('CEDEAR_RATIO_BRIDGE_URL')
+    : true;
+  const compositeCedear = ratioReady && quoteAvailable;
   const executionPolicy = getExecutionPolicy();
 
   const modules = {
@@ -37,6 +41,11 @@ export async function GET() {
       ready: metadataBridge,
       mode: metadataBridge ? 'bridge' : 'unconfigured',
       purpose: 'explicit ARS/D/cable related symbols',
+    },
+    cedearRatios: {
+      ready: ratioReady,
+      mode: ratioMode === 'bridge' ? 'bridge' : ratioMode === 'caja' ? 'caja-de-valores' : 'auto:caja+bridge-fallback',
+      officialSource: ratioMode !== 'bridge',
     },
     iolOrders: {
       ready: executionPolicy.validationEnabled

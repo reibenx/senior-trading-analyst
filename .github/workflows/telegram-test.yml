@@ -1,0 +1,27 @@
+name: Telegram Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  send-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+      MONITOR_CRON_TOKEN: ${{ secrets.MONITOR_CRON_TOKEN }}
+    steps:
+      - name: Send Telegram test notification
+        shell: bash
+        run: |
+          if [ -z "$APP_BASE_URL" ] || [ -z "$MONITOR_CRON_TOKEN" ]; then
+            echo "Required secrets are not configured."
+            exit 1
+          fi
+
+          BASE="${APP_BASE_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --max-time 30 \
+            -X POST "$BASE/api/monitor/test-notification" \
+            -H "Authorization: Bearer $MONITOR_CRON_TOKEN" \
+            -H "Content-Type: application/json"

@@ -1,52 +1,17 @@
-import type { CedearConversion, MarketStatus } from '@/core/domain/cedear';
+import type { CedearConversion } from '@/core/domain/cedear';
+import type {
+  CclProvider,
+  CclSnapshot,
+  CedearConversionProvider,
+  CedearRatioProvider,
+  CedearRatioRecord,
+  LocalQuoteProvider,
+  LocalQuoteRecord,
+} from '@/core/providers/cedear-provider-contracts';
+import { getIolDirectQuoteProvider } from '@/core/providers/iol-direct-quotes';
 
 interface BridgeConversionResponse {
   conversions?: CedearConversion[];
-}
-
-export interface CedearConversionProvider {
-  readonly id: string;
-  getConversions(symbols: string[]): Promise<CedearConversion[]>;
-}
-
-export interface CedearRatioRecord {
-  symbol: string;
-  underlyingSymbol: string;
-  cedearsPerUnderlyingShare: number;
-  updatedAt: string;
-  source: string;
-}
-
-export interface LocalQuoteRecord {
-  symbol: string;
-  localPriceArs: number;
-  localBidArs?: number;
-  localAskArs?: number;
-  impliedCclArsPerUsd?: number;
-  marketStatus: MarketStatus;
-  quoteTimestamp: string;
-  source: string;
-}
-
-export interface CclSnapshot {
-  cclArsPerUsd: number;
-  updatedAt: string;
-  source: string;
-}
-
-export interface CedearRatioProvider {
-  readonly id: string;
-  getRatios(symbols: string[]): Promise<CedearRatioRecord[]>;
-}
-
-export interface LocalQuoteProvider {
-  readonly id: string;
-  getQuotes(symbols: string[]): Promise<LocalQuoteRecord[]>;
-}
-
-export interface CclProvider {
-  readonly id: string;
-  getCcl(): Promise<CclSnapshot>;
 }
 
 function authHeaders(token?: string): HeadersInit | undefined {
@@ -70,7 +35,6 @@ export class CedearConversionBridgeProvider implements CedearConversionProvider 
       headers: authHeaders(this.token),
       cache: 'no-store',
     });
-
     if (!response.ok) throw new Error(`CEDEAR conversion bridge error: HTTP ${response.status}`);
 
     const payload = await response.json() as BridgeConversionResponse;
@@ -190,13 +154,28 @@ export function getCedearConversionProvider(): CedearConversionProvider | null {
   }
 
   const ratioUrl = process.env.CEDEAR_RATIO_BRIDGE_URL?.trim();
-  const quoteUrl = process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim();
-  const cclUrl = process.env.CCL_BRIDGE_URL?.trim();
-  if (!ratioUrl || !quoteUrl) return null;
+  if (!ratioUrl) return null;
 
+  const directQuotes = getIolDirectQuoteProvider();
+  const quoteUrl = process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim();
+  const quoteProvider: LocalQuoteProvider | null = directQuotes
+    ?? (quoteUrl ? new QuoteBridgeProvider(quoteUrl, process.env.IOL_BRIDGE_TOKEN?.trim()) : null);
+  if (!quoteProvider) return null;
+
+  const cclUrl = process.env.CCL_BRIDGE_URL?.trim();
   return new CompositeCedearConversionProvider(
     new RatioBridgeProvider(ratioUrl, process.env.CEDEAR_RATIO_BRIDGE_TOKEN?.trim()),
-    new QuoteBridgeProvider(quoteUrl, process.env.IOL_BRIDGE_TOKEN?.trim()),
+    quoteProvider,
     cclUrl ? new CclBridgeProvider(cclUrl, process.env.CCL_BRIDGE_TOKEN?.trim()) : undefined,
   );
 }
+
+export type {
+  CclProvider,
+  CclSnapshot,
+  CedearConversionProvider,
+  CedearRatioProvider,
+  CedearRatioRecord,
+  LocalQuoteProvider,
+  LocalQuoteRecord,
+} from '@/core/providers/cedear-provider-contracts';

@@ -1,38 +1,23 @@
-import type { AlertEvent, Position } from '../domain/trading';
-
-export interface Candle {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface MarketDataProvider {
-  getQuote(symbol: string): Promise<{ price: number; currency: string; timestamp: string }>;
-  getCandles(symbol: string, timeframe: string, limit: number): Promise<Candle[]>;
-}
+import type { AlertEvent, Position } from '@/core/domain/trading';
+import type { LineOverlay, ZoneOverlay } from '@/core/domain/market';
 
 export interface FundamentalDataProvider {
+  id: string;
   getFundamentals(symbol: string): Promise<Record<string, number | string | null>>;
 }
 
 export interface BrokerAdapter {
+  id: string;
   getPositions(): Promise<Position[]>;
 }
 
 export interface NotificationProvider {
+  id: string;
   send(event: AlertEvent): Promise<void>;
 }
 
-export interface ChartOverlay {
-  id: string;
-  kind: 'horizontal-line' | 'trend-line' | 'zone' | 'moving-average' | 'label';
-  label: string;
-  data: Record<string, unknown>;
-}
-
 export interface ChartAdapter {
-  render(symbol: string, overlays: ChartOverlay[]): Promise<void> | void;
+  id: string;
+  setSymbol(symbol: string): Promise<void> | void;
+  setOverlays(overlays: Array<LineOverlay | ZoneOverlay>): Promise<void> | void;
 }

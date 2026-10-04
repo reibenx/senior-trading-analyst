@@ -4,6 +4,7 @@ export interface CedearConversion {
   symbol: string;
   underlyingSymbol: string;
   cedearsPerUnderlyingShare: number;
+  ratioUpdatedAt?: string;
   cclArsPerUsd: number;
   benchmarkCclArsPerUsd?: number;
   cclBenchmarkDeviationPercent?: number;

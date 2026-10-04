@@ -14,20 +14,21 @@ export interface IndicatorPoint {
   value: number;
 }
 
-export type OverlayKind =
+export type LineOverlayKind =
   | 'ema'
   | 'sma'
   | 'support'
   | 'resistance'
   | 'trendline'
-  | 'entry-zone'
   | 'stop'
   | 'target'
   | 'vwap';
 
+export type OverlayKind = LineOverlayKind | 'entry-zone';
+
 export interface LineOverlay {
   id: string;
-  kind: OverlayKind;
+  kind: LineOverlayKind;
   label: string;
   value?: number;
   from?: { time: string; value: number };
@@ -44,6 +45,8 @@ export interface ZoneOverlay {
   meta?: Record<string, unknown>;
 }
 
+export type ChartOverlay = LineOverlay | ZoneOverlay;
+
 export interface TechnicalSnapshot {
   symbol: string;
   timeframe: Timeframe;
@@ -57,5 +60,5 @@ export interface TechnicalSnapshot {
   structure: 'HH_HL' | 'RANGE' | 'LH_LL';
   supportLevels: number[];
   resistanceLevels: number[];
-  overlays: Array<LineOverlay | ZoneOverlay>;
+  overlays: ChartOverlay[];
 }

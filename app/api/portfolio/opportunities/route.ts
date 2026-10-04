@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { PortfolioOpportunitySummary } from '@/core/domain/opportunity';
-import type { Strategy } from '@/core/domain/trading';
+import type { Position, Strategy } from '@/core/domain/trading';
 import type { Timeframe } from '@/core/domain/market';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
@@ -20,7 +20,7 @@ const TIMEFRAME: Record<Strategy, Timeframe> = {
   position: '1w',
 };
 
-async function analyzeOne(symbol: string, strategy: Strategy, positions: Awaited<ReturnType<NonNullable<ReturnType<typeof getBrokerAdapter>>['getPositions']>>) {
+async function analyzeOne(symbol: string, strategy: Strategy, positions: Position[]) {
   const analysis = await analyzeSymbol({ symbol, strategy, timeframe: TIMEFRAME[strategy] });
   const plan = buildTradePlan({
     strategy,

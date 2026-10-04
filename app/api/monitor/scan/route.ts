@@ -4,7 +4,9 @@ import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
 import { getAlertStateStore } from '@/core/monitoring/state-store';
+import { circularSlice, getMonitorCursorStore } from '@/core/monitoring/scan-cursor';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
+import { getMarketDataProvider } from '@/core/providers/market-provider';
 import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
@@ -59,6 +61,13 @@ function alertTtlSeconds(): number {
   return Number.isFinite(configured) ? Math.max(300, Math.min(604800, Math.floor(configured))) : 86400;
 }
 
+function configuredBatchSize(providerId: string): number {
+  const fallback = providerId === 'twelve-data' ? 5 : 20;
+  const configured = Number(process.env.MONITOR_MAX_SYMBOLS ?? fallback);
+  if (!Number.isFinite(configured)) return fallback;
+  return Math.max(1, Math.min(100, Math.floor(configured)));
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -70,12 +79,17 @@ export async function POST(request: Request) {
 
   const portfolioTargets = positions
     .filter((position) => position.quantity > 0)
+    .sort((a, b) => Math.max(0, b.marketValue ?? 0) - Math.max(0, a.marketValue ?? 0))
     .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy }));
 
-  const targets = dedupeTargets([...portfolioTargets, ...parseWatchlist()]);
-  const configuredMax = Number(process.env.MONITOR_MAX_SYMBOLS ?? 50);
-  const maxSymbols = Number.isFinite(configuredMax) ? Math.max(1, Math.min(100, Math.floor(configuredMax))) : 50;
-  const scanTargets = targets.slice(0, maxSymbols);
+  const targets = dedupeTargets([...parseWatchlist(), ...portfolioTargets]);
+  const marketProvider = getMarketDataProvider();
+  const maxSymbols = configuredBatchSize(marketProvider.id);
+  const cursorStore = getMonitorCursorStore();
+  const startIndex = cursorStore && targets.length
+    ? await cursorStore.take(targets.length, maxSymbols).catch(() => 0)
+    : 0;
+  const scanTargets = circularSlice(targets, startIndex, maxSymbols);
 
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();
@@ -88,6 +102,8 @@ export async function POST(request: Request) {
         symbol: target.symbol,
         strategy: target.strategy,
         timeframe: DEFAULT_TIMEFRAME[target.strategy],
+        includeSectorContext: false,
+        includeFundamentals: false,
       });
 
       const plan = buildTradePlan({
@@ -117,6 +133,10 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     scanned: scanTargets.length,
+    batchStart: startIndex,
+    totalTargets: targets.length,
+    nextBatchWillRotate: Boolean(cursorStore && targets.length > scanTargets.length),
+    marketProvider: marketProvider.id,
     portfolioPositions: positions.length,
     notificationProviders: providers.map((provider) => provider.id),
     persistentDeduplication: Boolean(stateStore),

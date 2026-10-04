@@ -20,6 +20,7 @@ function formatMoney(value: number) {
 export function PortfolioDashboard() {
   const [strategy, setStrategy] = useState<Strategy>('position');
   const [maxSymbols, setMaxSymbols] = useState(25);
+  const [monthlyCapital, setMonthlyCapital] = useState('1000');
   const [data, setData] = useState<PortfolioOpportunitySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,10 +29,16 @@ export function PortfolioDashboard() {
     setLoading(true);
     setError(null);
     try {
+      const parsedCapital = Number(monthlyCapital.replace(',', '.'));
       const response = await fetch('/api/portfolio/opportunities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy, maxSymbols }),
+        body: JSON.stringify({
+          strategy,
+          maxSymbols,
+          monthlyCapital: Number.isFinite(parsedCapital) && parsedCapital >= 0 ? parsedCapital : 0,
+          maxAllocationIdeas: 4,
+        }),
       });
       const result = await response.json() as PortfolioOpportunitySummary & ApiError;
       if (!response.ok) throw new Error(result.error ?? 'No fue posible analizar la cartera.');
@@ -52,7 +59,7 @@ export function PortfolioDashboard() {
       </header>
 
       <section className="portfolioShell">
-        <div className="panel portfolioControls">
+        <div className="panel portfolioControls portfolioControlsExtended">
           <div>
             <span className="eyebrow">ESTRATEGIA DE RANKING</span>
             <select value={strategy} onChange={(event) => setStrategy(event.target.value as Strategy)}>
@@ -60,6 +67,10 @@ export function PortfolioDashboard() {
               <option value="swing">Swing Trading</option>
               <option value="day">Day Trading</option>
             </select>
+          </div>
+          <div>
+            <span className="eyebrow">CAPITAL MENSUAL USD</span>
+            <input inputMode="decimal" value={monthlyCapital} onChange={(event) => setMonthlyCapital(event.target.value)} />
           </div>
           <div>
             <span className="eyebrow">MÁX. ACTIVOS</span>
@@ -82,6 +93,30 @@ export function PortfolioDashboard() {
               <div className="panel metricCard"><span>Valor cartera</span><strong>{formatMoney(data.portfolioValue)}</strong><small>moneda del bridge</small></div>
               <div className="panel metricCard"><span>Estrategia</span><strong>{data.strategy.toUpperCase()}</strong></div>
             </div>
+
+            {data.allocationPlan ? (
+              <section className="panel allocationPanel">
+                <div className="portfolioTitle">
+                  <div><span className="eyebrow">ASIGNACIÓN MENSUAL</span><h1>Propuesta para USD {formatMoney(data.allocationPlan.capital)}</h1></div>
+                  <small>Planificación en USD. La conversión a CEDEAR/ARS queda pendiente de CCL y ratio vigente.</small>
+                </div>
+                <div className="allocationSummary">
+                  <div><span>Asignado</span><b>USD {formatMoney(data.allocationPlan.allocated)}</b></div>
+                  <div><span>Reserva</span><b>USD {formatMoney(data.allocationPlan.cashReserve)}</b></div>
+                </div>
+                <div className="allocationGrid">
+                  {data.allocationPlan.items.map((item) => (
+                    <article className="allocationCard" key={item.symbol}>
+                      <div><b>{item.symbol}</b><strong>{item.allocationPercent.toFixed(1)}%</strong></div>
+                      <h2>USD {formatMoney(item.allocationAmount)}</h2>
+                      <p>Opportunity {item.opportunityScore}/100 · peso actual {item.currentWeightPercent.toFixed(1)}%</p>
+                      <small>{item.rationale}</small>
+                    </article>
+                  ))}
+                </div>
+                {data.allocationPlan.notes.map((note) => <p className="allocationNote" key={note}>• {note}</p>)}
+              </section>
+            ) : null}
 
             <section className="panel portfolioTablePanel">
               <div className="portfolioTitle">

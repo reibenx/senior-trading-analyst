@@ -1,5 +1,11 @@
 import type { BrokerOrderAdapter } from '@/core/adapters/contracts';
 import type { OrderDraft, OrderPlacementResult, OrderValidationResult } from '@/core/domain/orders';
+import {
+  assertPlacementAllowed,
+  assertValidationAllowed,
+  getExecutionPolicy,
+  type ExecutionPolicy,
+} from '@/core/execution/execution-policy';
 
 interface ValidateBridgeResponse {
   valid: boolean;
@@ -38,6 +44,7 @@ export class IolOrderBridgeAdapter implements BrokerOrderAdapter {
   constructor(
     private readonly baseUrl: string,
     private readonly token?: string,
+    private readonly policy: ExecutionPolicy = getExecutionPolicy(),
   ) {}
 
   private headers(): HeadersInit {
@@ -48,6 +55,8 @@ export class IolOrderBridgeAdapter implements BrokerOrderAdapter {
   }
 
   async validateOrder(order: OrderDraft): Promise<OrderValidationResult> {
+    assertValidationAllowed(this.policy);
+
     const url = new URL('/orders/validate', this.baseUrl);
     const response = await fetch(url, {
       method: 'POST',
@@ -77,6 +86,7 @@ export class IolOrderBridgeAdapter implements BrokerOrderAdapter {
   }
 
   async placeValidatedOrder(validationId: string, order: OrderDraft): Promise<OrderPlacementResult> {
+    assertPlacementAllowed(this.policy);
     if (!validationId) throw new Error('validationId is required');
 
     const url = new URL('/orders/place', this.baseUrl);
@@ -98,7 +108,10 @@ export class IolOrderBridgeAdapter implements BrokerOrderAdapter {
 }
 
 export function getBrokerOrderAdapter(): BrokerOrderAdapter | null {
+  const policy = getExecutionPolicy();
+  if (!policy.validationEnabled) return null;
+
   const baseUrl = process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim();
   if (!baseUrl) return null;
-  return new IolOrderBridgeAdapter(baseUrl, process.env.IOL_BRIDGE_TOKEN?.trim());
+  return new IolOrderBridgeAdapter(baseUrl, process.env.IOL_BRIDGE_TOKEN?.trim(), policy);
 }

@@ -3,6 +3,7 @@ export type ExecutionMode = 'disabled' | 'sandbox' | 'production';
 export interface ExecutionPolicy {
   mode: ExecutionMode;
   validationEnabled: boolean;
+  simulationEnabled: boolean;
   placementEnabled: boolean;
   reason?: string;
 }
@@ -19,6 +20,7 @@ export function getExecutionPolicy(env: NodeJS.ProcessEnv = process.env): Execut
     return {
       mode,
       validationEnabled: false,
+      simulationEnabled: false,
       placementEnabled: false,
       reason: 'La ejecución está deshabilitada por configuración.',
     };
@@ -30,37 +32,38 @@ export function getExecutionPolicy(env: NodeJS.ProcessEnv = process.env): Execut
       return {
         mode,
         validationEnabled: false,
+        simulationEnabled: false,
         placementEnabled: false,
-        reason: 'Sandbox seleccionado pero no hay bridge de órdenes configurado.',
+        reason: 'Sandbox seleccionado pero no hay bridge de validación configurado.',
       };
     }
     return {
       mode,
       validationEnabled: true,
-      placementEnabled: true,
-    };
-  }
-
-  const productionAck = env.IOL_PRODUCTION_TRADING_ENABLED?.trim().toLowerCase() === 'true';
-  if (!productionAck) {
-    return {
-      mode,
-      validationEnabled: true,
+      simulationEnabled: true,
       placementEnabled: false,
-      reason: 'Producción seleccionada, pero IOL_PRODUCTION_TRADING_ENABLED no está habilitado explícitamente.',
+      reason: 'Sandbox seguro: valida contra el bridge, pero la colocación es siempre simulada.',
     };
   }
 
   return {
     mode,
     validationEnabled: true,
-    placementEnabled: true,
+    simulationEnabled: false,
+    placementEnabled: false,
+    reason: 'La colocación real desde la web-app permanece deshabilitada por diseño. Producción sólo admite validación y revisión.',
   };
 }
 
 export function assertValidationAllowed(policy: ExecutionPolicy) {
   if (!policy.validationEnabled) {
     throw new Error(policy.reason ?? 'Order validation is disabled');
+  }
+}
+
+export function assertSimulationAllowed(policy: ExecutionPolicy) {
+  if (!policy.simulationEnabled || policy.mode !== 'sandbox') {
+    throw new Error(policy.reason ?? 'Sandbox simulation is disabled');
   }
 }
 

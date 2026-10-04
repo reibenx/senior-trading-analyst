@@ -8,7 +8,9 @@ interface ModuleState {
   ready?: boolean;
   mode?: string;
   validationEnabled?: boolean;
+  simulationEnabled?: boolean;
   placementEnabled?: boolean;
+  confirmationSecretReady?: boolean;
   reason?: string;
   impliedCableCcl?: boolean;
   globalCclBenchmark?: boolean;
@@ -33,6 +35,7 @@ function moduleLabel(key: string) {
     iolAssetMetadata: 'IOL · Especies relacionadas',
     cedearRatios: 'Ratios CEDEAR',
     iolOrders: 'IOL · Órdenes',
+    orderAudit: 'Auditoría de órdenes',
     cedearConversion: 'Conversión CEDEAR / CCL',
     alertState: 'Estado de alertas / Redis',
     telegram: 'Telegram',
@@ -102,7 +105,9 @@ export function SystemReadiness() {
                     </div>
                     {state.mode ? <p>Modo <b>{state.mode}</b></p> : null}
                     {state.validationEnabled !== undefined ? <p>Validación <b>{state.validationEnabled ? 'habilitada' : 'bloqueada'}</b></p> : null}
-                    {state.placementEnabled !== undefined ? <p>Colocación <b>{state.placementEnabled ? 'habilitada' : 'bloqueada'}</b></p> : null}
+                    {state.simulationEnabled !== undefined ? <p>Simulación <b>{state.simulationEnabled ? 'habilitada' : 'bloqueada'}</b></p> : null}
+                    {state.placementEnabled !== undefined ? <p>Orden real <b>{state.placementEnabled ? 'habilitada' : 'bloqueada'}</b></p> : null}
+                    {state.confirmationSecretReady !== undefined ? <p>Firma de confirmación <b>{state.confirmationSecretReady ? 'lista' : 'pendiente'}</b></p> : null}
                     {state.officialSource !== undefined ? <p>Fuente oficial <b>{state.officialSource ? 'sí' : 'no'}</b></p> : null}
                     {state.impliedCableCcl !== undefined ? <p>CCL por especie cable <b>{state.impliedCableCcl ? 'disponible' : 'no disponible'}</b></p> : null}
                     {state.globalCclBenchmark !== undefined ? <p>Benchmark CCL <b>{state.globalCclBenchmark ? 'disponible' : 'no disponible'}</b></p> : null}

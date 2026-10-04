@@ -10,6 +10,7 @@ export async function GET() {
   const ratioMode = process.env.CEDEAR_RATIO_PROVIDER?.trim().toLowerCase() || 'auto';
   const directIol = configured('IOL_API_USERNAME', 'IOL_API_PASSWORD');
   const bridgeIol = configured('IOL_BRIDGE_URL');
+  const redisReady = configured('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN');
   const metadataBridge = Boolean(
     process.env.IOL_ASSET_METADATA_BRIDGE_URL?.trim()
     || process.env.IOL_BRIDGE_URL?.trim(),
@@ -17,9 +18,7 @@ export async function GET() {
   const allInOneCedear = configured('CEDEAR_CONVERSION_BRIDGE_URL');
   const quoteAvailable = directIol
     || Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
-  const ratioReady = ratioMode === 'bridge'
-    ? configured('CEDEAR_RATIO_BRIDGE_URL')
-    : true;
+  const ratioReady = ratioMode === 'bridge' ? configured('CEDEAR_RATIO_BRIDGE_URL') : true;
   const compositeCedear = ratioReady && quoteAvailable;
   const executionPolicy = getExecutionPolicy();
   const orderBridgeReady = Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
@@ -62,13 +61,18 @@ export async function GET() {
       ready: true,
       mode: configured('ORDER_AUDIT_BRIDGE_URL') ? 'bridge' : 'server-log',
     },
+    activityHistory: {
+      ready: redisReady,
+      mode: redisReady ? 'redis-rest' : 'unconfigured',
+      purpose: 'bounded history of alerts and sandbox/order audit events',
+    },
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,
       mode: allInOneCedear ? 'all-in-one' : compositeCedear ? 'composite' : 'unconfigured',
       impliedCableCcl: directIol && metadataBridge,
       globalCclBenchmark: configured('CCL_BRIDGE_URL'),
     },
-    alertState: { ready: configured('UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN') },
+    alertState: { ready: redisReady },
     telegram: { ready: configured('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID') },
     whatsapp: { ready: configured('WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_RECIPIENT') },
     monitorCron: { ready: configured('MONITOR_CRON_TOKEN') },

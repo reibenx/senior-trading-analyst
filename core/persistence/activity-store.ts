@@ -1,3 +1,5 @@
+import { getRedisRestConfig } from '@/core/persistence/redis-env';
+
 export type ActivityKind = 'ALERT' | 'ORDER_AUDIT' | 'DECISION' | 'SIGNAL';
 
 export interface ActivityRecord {
@@ -59,11 +61,10 @@ export class UpstashActivityStore implements ActivityStore {
 }
 
 export function getActivityStore(): ActivityStore | null {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!restUrl || !token) return null;
+  const redis = getRedisRestConfig();
+  if (!redis) return null;
   const maxItems = Number(process.env.ACTIVITY_HISTORY_MAX_ITEMS ?? 1000);
-  return new UpstashActivityStore(restUrl, token, Number.isFinite(maxItems) ? maxItems : 1000);
+  return new UpstashActivityStore(redis.restUrl, redis.token, Number.isFinite(maxItems) ? maxItems : 1000);
 }
 
 export async function appendActivity(record: Omit<ActivityRecord, 'id' | 'createdAt'> & Partial<Pick<ActivityRecord, 'id' | 'createdAt'>>) {

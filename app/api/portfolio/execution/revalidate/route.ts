@@ -19,6 +19,7 @@ const requestSchema = z.object({
   maxQuoteAgeSeconds: z.number().int().min(10).max(600).optional(),
   maxPriceDriftPercent: z.number().positive().max(10).optional(),
   maxCclDriftPercent: z.number().positive().max(10).optional(),
+  maxCclBenchmarkDeviationPercent: z.number().positive().max(20).optional(),
 });
 
 export async function POST(request: Request) {
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
         maxQuoteAgeSeconds: payload.maxQuoteAgeSeconds,
         maxPriceDriftPercent: payload.maxPriceDriftPercent,
         maxCclDriftPercent: payload.maxCclDriftPercent,
+        maxCclBenchmarkDeviationPercent: payload.maxCclBenchmarkDeviationPercent,
         requireOpenMarket: true,
       },
     ));

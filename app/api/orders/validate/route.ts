@@ -75,6 +75,7 @@ export async function POST(request: Request) {
         confirmationUrl: validation.confirmationUrl,
         confirmationExpiresAt: validation.confirmationExpiresAt,
         messages: validation.messages,
+        simulationReady: false,
         placementReady: false,
         actionRequired: 'BROKER_CONFIRMATION',
       });
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
         requiresDdjj: true,
         ddjjUrl: validation.ddjjUrl,
         messages: validation.messages,
+        simulationReady: false,
         placementReady: false,
         actionRequired: 'DDJJ',
       });
@@ -102,6 +104,26 @@ export async function POST(request: Request) {
 
     if (!validation.validationId) {
       return NextResponse.json({ error: 'Broker validation succeeded without a usable validation id' }, { status: 502 });
+    }
+
+    await recordOrderAudit({
+      stage: 'VALIDATION_APPROVED',
+      mode: policy.mode,
+      order,
+      brokerAdapterId: adapter.id,
+      validationIdPresent: true,
+      accepted: true,
+    });
+
+    if (!policy.simulationEnabled) {
+      return NextResponse.json({
+        valid: true,
+        mode: policy.mode,
+        simulationReady: false,
+        placementReady: false,
+        messages: validation.messages,
+        message: 'Validación completada. La web-app no habilita colocación real.',
+      });
     }
 
     const secret = process.env.ORDER_CONFIRMATION_SECRET?.trim() ?? '';
@@ -113,22 +135,15 @@ export async function POST(request: Request) {
       ttlSeconds: 90,
     });
 
-    await recordOrderAudit({
-      stage: 'VALIDATION_APPROVED',
-      mode: policy.mode,
-      order,
-      brokerAdapterId: adapter.id,
-      validationIdPresent: true,
-      accepted: true,
-    });
-
     return NextResponse.json({
       valid: true,
       mode: policy.mode,
-      placementReady: policy.placementEnabled,
+      simulationReady: true,
+      placementReady: false,
       confirmationToken,
       confirmationExpiresInSeconds: 90,
       messages: validation.messages,
+      message: 'Validación completada. El siguiente paso es una simulación local; no se enviará una orden real.',
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

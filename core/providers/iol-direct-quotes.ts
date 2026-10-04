@@ -1,5 +1,10 @@
-import type { LocalQuoteProvider, LocalQuoteRecord } from '@/core/providers/cedear-provider-contracts';
+import type {
+  CedearAssetMetadataProvider,
+  LocalQuoteProvider,
+  LocalQuoteRecord,
+} from '@/core/providers/cedear-provider-contracts';
 import { getIolApiClient, type IolApiClient } from '@/core/providers/iol-api-client';
+import { getIolAssetMetadataProvider } from '@/core/providers/iol-asset-metadata';
 
 interface IolQuoteResponse {
   ultimoPrecio?: number;
@@ -10,6 +15,13 @@ interface IolQuoteResponse {
   precioVenta?: number;
   puntas?: unknown;
   moneda?: string;
+}
+
+interface ParsedQuote {
+  price: number;
+  timestamp: string;
+  bid?: number;
+  ask?: number;
 }
 
 function finite(value: unknown): number | undefined {
@@ -46,36 +58,77 @@ function marketStatus(timestamp: string, bid?: number, ask?: number): LocalQuote
   return 'UNKNOWN';
 }
 
+function oldestTimestamp(...timestamps: Array<string | undefined>): string {
+  const valid = timestamps
+    .filter((value): value is string => Boolean(value) && Number.isFinite(Date.parse(value as string)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  return valid[0] ?? new Date(0).toISOString();
+}
+
 export class IolDirectQuoteProvider implements LocalQuoteProvider {
   readonly id = 'iol-direct-quotes';
 
-  constructor(private readonly client: IolApiClient) {}
+  constructor(
+    private readonly client: IolApiClient,
+    private readonly metadataProvider?: CedearAssetMetadataProvider,
+  ) {}
+
+  private async fetchQuote(symbol: string): Promise<ParsedQuote> {
+    const payload = await this.client.requestJson<IolQuoteResponse>(
+      `/api/v2/bCBA/Titulos/${encodeURIComponent(symbol)}/CotizacionDetalle`,
+    );
+    const price = finite(payload.ultimoPrecio);
+    const timestamp = payload.fechaHora;
+    if (!price || !timestamp) throw new Error(`Invalid IOL quote payload for ${symbol}`);
+
+    const bid = finite(payload.puntaCompra)
+      ?? finite(payload.precioCompra)
+      ?? findPriceByKeys(payload.puntas, ['precioCompra', 'precio', 'compra']);
+    const ask = finite(payload.puntaVenta)
+      ?? finite(payload.precioVenta)
+      ?? findPriceByKeys(payload.puntas, ['precioVenta', 'precio', 'venta']);
+
+    return { price, timestamp, bid, ask };
+  }
 
   async getQuotes(symbols: string[]): Promise<LocalQuoteRecord[]> {
     const normalized = [...new Set(symbols.map((symbol) => symbol.toUpperCase()))];
-    const results = await Promise.allSettled(normalized.map(async (symbol) => {
-      const payload = await this.client.requestJson<IolQuoteResponse>(
-        `/api/v2/bCBA/Titulos/${encodeURIComponent(symbol)}/CotizacionDetalle`,
-      );
-      const localPriceArs = finite(payload.ultimoPrecio);
-      const quoteTimestamp = payload.fechaHora;
-      if (!localPriceArs || !quoteTimestamp) throw new Error(`Invalid IOL quote payload for ${symbol}`);
+    const metadata = this.metadataProvider
+      ? await this.metadataProvider.getMetadata(normalized).catch(() => [])
+      : [];
+    const metadataMap = new Map(metadata.map((item) => [item.symbol.toUpperCase(), item]));
 
-      const bid = finite(payload.puntaCompra)
-        ?? finite(payload.precioCompra)
-        ?? findPriceByKeys(payload.puntas, ['precioCompra', 'precio', 'compra']);
-      const ask = finite(payload.puntaVenta)
-        ?? finite(payload.precioVenta)
-        ?? findPriceByKeys(payload.puntas, ['precioVenta', 'precio', 'venta']);
+    const results = await Promise.allSettled(normalized.map(async (symbol) => {
+      const local = await this.fetchQuote(symbol);
+      const asset = metadataMap.get(symbol);
+      const cableSymbol = asset?.cableSymbol?.toUpperCase();
+
+      let impliedCclArsPerUsd: number | undefined;
+      let effectiveTimestamp = local.timestamp;
+      let source = 'iol-direct-api';
+
+      if (cableSymbol) {
+        try {
+          const cable = await this.fetchQuote(cableSymbol);
+          impliedCclArsPerUsd = local.price / cable.price;
+          effectiveTimestamp = oldestTimestamp(local.timestamp, cable.timestamp);
+          source = `iol-direct-api:${symbol}/${cableSymbol}`;
+        } catch {
+          // A missing or stale cable quote must not break the ARS quote. The
+          // composite provider can still use a global CCL fallback.
+        }
+      }
 
       return {
         symbol,
-        localPriceArs,
-        localBidArs: bid,
-        localAskArs: ask,
-        marketStatus: marketStatus(quoteTimestamp, bid, ask),
-        quoteTimestamp,
-        source: 'iol-direct-api',
+        localPriceArs: local.price,
+        localBidArs: local.bid,
+        localAskArs: local.ask,
+        impliedCclArsPerUsd,
+        cableSymbol,
+        marketStatus: marketStatus(effectiveTimestamp, local.bid, local.ask),
+        quoteTimestamp: effectiveTimestamp,
+        source,
       } satisfies LocalQuoteRecord;
     }));
 
@@ -85,5 +138,6 @@ export class IolDirectQuoteProvider implements LocalQuoteProvider {
 
 export function getIolDirectQuoteProvider(): IolDirectQuoteProvider | null {
   const client = getIolApiClient();
-  return client ? new IolDirectQuoteProvider(client) : null;
+  if (!client) return null;
+  return new IolDirectQuoteProvider(client, getIolAssetMetadataProvider() ?? undefined);
 }

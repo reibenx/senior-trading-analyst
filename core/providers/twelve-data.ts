@@ -28,6 +28,14 @@ interface TwelveDataResponse {
   values?: TwelveDataValue[];
 }
 
+interface CacheEntry {
+  expiresAt: number;
+  bars: OHLCVBar[];
+}
+
+const barsCache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<OHLCVBar[]>>();
+
 function parseFinite(value: string | undefined, field: string): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`Invalid ${field} returned by Twelve Data`);
@@ -48,6 +56,13 @@ function normalizeBars(values: TwelveDataValue[]): OHLCVBar[] {
     .sort((a, b) => a.time.localeCompare(b.time));
 }
 
+function cacheTtlMs(timeframe: Timeframe): number {
+  const configuredSeconds = Number(process.env.TWELVE_DATA_CACHE_TTL_SECONDS ?? '90');
+  const base = Number.isFinite(configuredSeconds) && configuredSeconds >= 30 ? configuredSeconds * 1000 : 90_000;
+  if (timeframe === '1d' || timeframe === '1w' || timeframe === '1M') return Math.max(base, 5 * 60_000);
+  return base;
+}
+
 export class TwelveDataMarketDataProvider implements MarketDataProvider {
   readonly id = 'twelve-data';
 
@@ -57,9 +72,31 @@ export class TwelveDataMarketDataProvider implements MarketDataProvider {
 
   async getBars(request: MarketDataRequest): Promise<OHLCVBar[]> {
     const outputsize = Math.max(20, Math.min(request.limit ?? 260, 5000));
+    const symbol = request.symbol.trim().toUpperCase();
+    const cacheKey = `${symbol}:${request.timeframe}:${outputsize}`;
+    const cached = barsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.bars;
+
+    const existing = inFlight.get(cacheKey);
+    if (existing) return existing;
+
+    const task = this.fetchBars(symbol, request.timeframe, outputsize)
+      .then((bars) => {
+        barsCache.set(cacheKey, { bars, expiresAt: Date.now() + cacheTtlMs(request.timeframe) });
+        return bars;
+      })
+      .finally(() => {
+        inFlight.delete(cacheKey);
+      });
+
+    inFlight.set(cacheKey, task);
+    return task;
+  }
+
+  private async fetchBars(symbol: string, timeframe: Timeframe, outputsize: number): Promise<OHLCVBar[]> {
     const params = new URLSearchParams({
-      symbol: request.symbol,
-      interval: INTERVAL_MAP[request.timeframe],
+      symbol,
+      interval: INTERVAL_MAP[timeframe],
       outputsize: String(outputsize),
       apikey: this.apiKey,
       format: 'JSON',
@@ -73,6 +110,9 @@ export class TwelveDataMarketDataProvider implements MarketDataProvider {
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error('Twelve Data rate limit reached (HTTP 429). Retry after the credit window resets.');
+      }
       throw new Error(`Twelve Data HTTP ${response.status}`);
     }
 

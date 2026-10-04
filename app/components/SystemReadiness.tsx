@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import styles from '@/app/components/SystemReadiness.module.css';
 
 interface ModuleState {
   ready?: boolean;
@@ -74,7 +75,7 @@ export function SystemReadiness() {
       </header>
 
       <section className="portfolioShell">
-        <section className="panel systemHero">
+        <section className={`panel ${styles.hero}`}>
           <div>
             <span className="eyebrow">READINESS</span>
             <h1>{health?.criticalReady ? 'Núcleo listo' : 'Configuración incompleta'}</h1>
@@ -89,13 +90,13 @@ export function SystemReadiness() {
 
         {health ? (
           <>
-            <section className="systemGrid">
+            <section className={styles.grid}>
               {Object.entries(health.modules).map(([key, raw]) => {
                 const state: ModuleState = typeof raw === 'boolean' ? { ready: raw } : raw;
                 const ready = Boolean(state.ready);
                 return (
-                  <article className={`panel systemCard ${ready ? 'systemReady' : 'systemPending'}`} key={key}>
-                    <div className="systemCardHead">
+                  <article className={`panel ${styles.card} ${ready ? styles.ready : styles.pending}`} key={key}>
+                    <div className={styles.head}>
                       <strong>{moduleLabel(key)}</strong>
                       <span>{ready ? 'READY' : 'PENDING'}</span>
                     </div>
@@ -111,7 +112,7 @@ export function SystemReadiness() {
                 );
               })}
             </section>
-            <p className="allocationNote">Última verificación: {new Date(health.generatedAt).toLocaleString('es-AR')}</p>
+            <p className={styles.timestamp}>Última verificación: {new Date(health.generatedAt).toLocaleString('es-AR')}</p>
           </>
         ) : null}
       </section>

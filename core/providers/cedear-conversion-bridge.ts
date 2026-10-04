@@ -24,6 +24,13 @@ function pctDeviation(value: number, reference: number): number {
   return Math.abs((value - reference) / reference) * 100;
 }
 
+function oldestMarketTimestamp(quoteTimestamp: string, cclTimestamp?: string): string {
+  const timestamps = [quoteTimestamp, cclTimestamp]
+    .filter((value): value is string => Boolean(value) && Number.isFinite(Date.parse(value as string)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  return timestamps[0] ?? quoteTimestamp;
+}
+
 export class CedearConversionBridgeProvider implements CedearConversionProvider {
   readonly id = 'cedear-conversion-bridge';
 
@@ -176,9 +183,12 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
         ? pctDeviation(impliedCcl, globalCcl.cclArsPerUsd)
         : undefined;
 
-      const timestamps = [ratio.updatedAt, quote.quoteTimestamp];
-      if (globalCcl?.updatedAt && !usingImplied) timestamps.push(globalCcl.updatedAt);
-      const oldestTimestamp = [...timestamps].sort()[0] ?? quote.quoteTimestamp;
+      // Ratio freshness is tracked separately. Market freshness must only be
+      // constrained by the quote and by the global CCL when it is actually used.
+      const marketUpdatedAt = oldestMarketTimestamp(
+        quote.quoteTimestamp,
+        !usingImplied ? globalCcl?.updatedAt : undefined,
+      );
       const cclSourceDescription = usingImplied
         ? `${quote.source}:implied-cable`
         : globalCcl?.source ?? 'unknown-ccl';
@@ -187,6 +197,7 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
         symbol,
         underlyingSymbol: ratio.underlyingSymbol,
         cedearsPerUnderlyingShare: ratio.cedearsPerUnderlyingShare,
+        ratioUpdatedAt: ratio.updatedAt,
         cclArsPerUsd: cclValue,
         benchmarkCclArsPerUsd: globalCcl?.cclArsPerUsd,
         cclBenchmarkDeviationPercent: benchmarkDeviation,
@@ -197,7 +208,7 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
         localAskArs: quote.localAskArs,
         marketStatus: quote.marketStatus,
         quoteTimestamp: quote.quoteTimestamp,
-        updatedAt: oldestTimestamp,
+        updatedAt: marketUpdatedAt,
         source: `${ratio.source}+${quote.source}+${cclSourceDescription}`,
       } satisfies CedearConversion];
     });

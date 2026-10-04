@@ -9,6 +9,8 @@ export interface Position {
   marketValue?: number;
   currency: string;
   broker?: string;
+  market?: string;
+  assetType?: string;
 }
 
 export interface ScoreCard {

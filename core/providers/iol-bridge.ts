@@ -51,6 +51,8 @@ export class IOLBridgeBrokerAdapter implements BrokerAdapter {
           marketValue: explicitValue > 0 ? explicitValue : Math.max(0, calculatedValue),
           currency: position.currency ?? 'ARS',
           broker: 'IOL',
+          market: position.market,
+          assetType: position.assetType,
         } satisfies Position;
       });
   }

@@ -21,6 +21,7 @@ export interface RevalidateExecutionOptions {
   maxQuoteAgeSeconds?: number;
   maxPriceDriftPercent?: number;
   maxCclDriftPercent?: number;
+  maxCclBenchmarkDeviationPercent?: number;
   requireOpenMarket?: boolean;
 }
 
@@ -32,6 +33,7 @@ export function revalidateCedearExecution(
   const maxQuoteAgeSeconds = options.maxQuoteAgeSeconds ?? 120;
   const maxPriceDriftPercent = options.maxPriceDriftPercent ?? 1;
   const maxCclDriftPercent = options.maxCclDriftPercent ?? 1.5;
+  const maxCclBenchmarkDeviationPercent = options.maxCclBenchmarkDeviationPercent ?? 2.5;
   const requireOpenMarket = options.requireOpenMarket ?? true;
 
   if (!latest || !latest.localPriceArs) {
@@ -109,6 +111,24 @@ export function revalidateCedearExecution(
     };
   }
 
+  const benchmarkDeviation = latest.cclBenchmarkDeviationPercent;
+  if (
+    latest.cclSource === 'IMPLIED_CABLE'
+    && benchmarkDeviation !== undefined
+    && benchmarkDeviation > maxCclBenchmarkDeviationPercent
+  ) {
+    return {
+      symbol: intent.symbol,
+      status: 'CCL_BENCHMARK_DIVERGED',
+      readyToConfirm: false,
+      latestConversion: latest,
+      priceDriftPercent,
+      cclDriftPercent,
+      cclBenchmarkDeviationPercent: benchmarkDeviation,
+      reason: `El CCL implícito del CEDEAR se desvía ${benchmarkDeviation.toFixed(2)}% del benchmark, por encima del máximo permitido de ${maxCclBenchmarkDeviationPercent}%.`,
+    };
+  }
+
   const refreshedPlan = buildCedearExecutionPlan(intent.allocationUsd, latest);
   if (refreshedPlan.quantity < 1) {
     return {
@@ -119,6 +139,7 @@ export function revalidateCedearExecution(
       refreshedPlan,
       priceDriftPercent,
       cclDriftPercent,
+      cclBenchmarkDeviationPercent: benchmarkDeviation,
       reason: 'El presupuesto ya no alcanza para una unidad al precio revalidado.',
     };
   }
@@ -131,5 +152,6 @@ export function revalidateCedearExecution(
     refreshedPlan,
     priceDriftPercent,
     cclDriftPercent,
+    cclBenchmarkDeviationPercent: benchmarkDeviation,
   };
 }

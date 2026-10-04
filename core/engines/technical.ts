@@ -7,6 +7,7 @@ import {
   recentPivotLowPoints,
   recentPivotLows,
   rsi,
+  vwap,
 } from '@/core/engines/indicators';
 
 function round(value: number, digits = 2): number {
@@ -64,6 +65,50 @@ function projectedTrendline(
   };
 }
 
+function fibonacciOverlays(
+  bars: OHLCVBar[],
+  lowPivots: IndicatorPoint[],
+  highPivots: IndicatorPoint[],
+  volatility: number,
+): LineOverlay[] {
+  const latestLow = lowPivots.at(-1);
+  const latestHigh = highPivots.at(-1);
+  if (!latestLow || !latestHigh) return [];
+
+  const lowIndex = bars.findIndex((bar) => bar.time === latestLow.time);
+  const highIndex = bars.findIndex((bar) => bar.time === latestHigh.time);
+  if (lowIndex < 0 || highIndex < 0 || lowIndex === highIndex) return [];
+
+  const swingRange = Math.abs(latestHigh.value - latestLow.value);
+  if (swingRange < volatility * 2) return [];
+
+  const ratios = [0.382, 0.5, 0.618];
+  const upswing = lowIndex < highIndex;
+
+  return ratios.map((ratio) => {
+    const value = upswing
+      ? latestHigh.value - swingRange * ratio
+      : latestLow.value + swingRange * ratio;
+
+    return {
+      id: `fib-${Math.round(ratio * 1000)}`,
+      kind: 'fibonacci',
+      label: `Fib ${(ratio * 100).toFixed(1)}%`,
+      value: round(value),
+      meta: {
+        ratio,
+        direction: upswing ? 'up' : 'down',
+        swingLow: round(Math.min(latestLow.value, latestHigh.value)),
+        swingHigh: round(Math.max(latestLow.value, latestHigh.value)),
+      },
+    } satisfies LineOverlay;
+  });
+}
+
+function shouldShowVwap(timeframe: Timeframe): boolean {
+  return timeframe === '1m' || timeframe === '5m' || timeframe === '15m' || timeframe === '1h';
+}
+
 export interface TechnicalAnalysisInput {
   symbol: string;
   timeframe: Timeframe;
@@ -81,6 +126,7 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   const ema200 = ema(closes, 200);
   const atr14 = atr(bars, 14);
   const rsi14 = rsi(closes, 14);
+  const rollingVwap = shouldShowVwap(timeframe) ? vwap(bars, 20) : undefined;
 
   const supportLevels = recentPivotLows(bars, 3, 6)
     .filter((level) => level < currentPrice)
@@ -96,11 +142,13 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   const highPivots = recentPivotHighPoints(bars, 3, 4);
   const structure = detectStructure(bars);
   const trend = detectTrend(currentPrice, ema50, ema200);
+  const volatility = atr14 ?? currentPrice * 0.025;
 
   const overlays: Array<LineOverlay | ZoneOverlay> = [];
   if (ema20 !== undefined) overlays.push({ id: 'ema20', kind: 'ema', label: 'EMA 20', value: round(ema20) });
   if (ema50 !== undefined) overlays.push({ id: 'ema50', kind: 'ema', label: 'EMA 50', value: round(ema50) });
   if (ema200 !== undefined) overlays.push({ id: 'ema200', kind: 'ema', label: 'EMA 200', value: round(ema200) });
+  if (rollingVwap !== undefined) overlays.push({ id: 'vwap20', kind: 'vwap', label: 'VWAP 20', value: round(rollingVwap) });
 
   supportLevels.forEach((value, index) => overlays.push({ id: `support-${index}`, kind: 'support', label: `S${index + 1}`, value: round(value) }));
   resistanceLevels.forEach((value, index) => overlays.push({ id: `resistance-${index}`, kind: 'resistance', label: `R${index + 1}`, value: round(value) }));
@@ -109,9 +157,9 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   const resistanceTrendline = projectedTrendline(bars, highPivots, 'trend-resistance', 'Trendline resistencia');
   if (supportTrendline) overlays.push(supportTrendline);
   if (resistanceTrendline) overlays.push(resistanceTrendline);
+  overlays.push(...fibonacciOverlays(bars, lowPivots, highPivots, volatility));
 
   const referenceSupport = supportLevels[0] ?? ema50 ?? ema20 ?? currentPrice * 0.96;
-  const volatility = atr14 ?? currentPrice * 0.025;
   const entryAHigh = Math.min(currentPrice, referenceSupport + volatility * 0.45);
   const entryALow = Math.max(0, referenceSupport - volatility * 0.35);
   const entryBReference = supportLevels[1] ?? ema200 ?? referenceSupport - volatility * 1.25;

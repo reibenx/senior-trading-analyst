@@ -7,22 +7,25 @@ function round(value: number, digits = 2): number {
 }
 
 function detectStructure(bars: OHLCVBar[]): TechnicalSnapshot['structure'] {
-  const lows = recentPivotLows(bars, 2, 2);
-  const highs = recentPivotHighs(bars, 2, 2);
+  const lows = recentPivotLows(bars, 2, 3);
+  const highs = recentPivotHighs(bars, 2, 3);
+
   if (lows.length >= 2 && highs.length >= 2) {
-    const higherLows = lows[0] > lows[1];
-    const higherHighs = highs[highs.length - 1] > highs[0];
-    if (higherLows && higherHighs) return 'HH_HL';
-    const lowerLows = lows[0] < lows[1];
-    const lowerHighs = highs[highs.length - 1] < highs[0];
-    if (lowerLows && lowerHighs) return 'LH_LL';
+    const previousLow = lows[lows.length - 2];
+    const latestLow = lows[lows.length - 1];
+    const previousHigh = highs[highs.length - 2];
+    const latestHigh = highs[highs.length - 1];
+
+    if (latestLow > previousLow && latestHigh > previousHigh) return 'HH_HL';
+    if (latestLow < previousLow && latestHigh < previousHigh) return 'LH_LL';
   }
+
   return 'RANGE';
 }
 
 function detectTrend(currentPrice: number, ema50?: number, ema200?: number): TechnicalSnapshot['trend'] {
-  if (ema50 && ema200 && currentPrice > ema50 && ema50 > ema200) return 'BULL';
-  if (ema50 && ema200 && currentPrice < ema50 && ema50 < ema200) return 'BEAR';
+  if (ema50 !== undefined && ema200 !== undefined && currentPrice > ema50 && ema50 > ema200) return 'BULL';
+  if (ema50 !== undefined && ema200 !== undefined && currentPrice < ema50 && ema50 < ema200) return 'BEAR';
   return 'NEUTRAL';
 }
 
@@ -43,15 +46,24 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   const ema200 = ema(closes, 200);
   const atr14 = atr(bars, 14);
   const rsi14 = rsi(closes, 14);
-  const supportLevels = recentPivotLows(bars, 3, 3).filter((level) => level < currentPrice);
-  const resistanceLevels = recentPivotHighs(bars, 3, 3).filter((level) => level > currentPrice);
+
+  const supportLevels = recentPivotLows(bars, 3, 6)
+    .filter((level) => level < currentPrice)
+    .sort((a, b) => b - a)
+    .slice(0, 3);
+
+  const resistanceLevels = recentPivotHighs(bars, 3, 6)
+    .filter((level) => level > currentPrice)
+    .sort((a, b) => a - b)
+    .slice(0, 3);
+
   const structure = detectStructure(bars);
   const trend = detectTrend(currentPrice, ema50, ema200);
 
   const overlays: Array<LineOverlay | ZoneOverlay> = [];
-  if (ema20) overlays.push({ id: 'ema20', kind: 'ema', label: 'EMA 20', value: round(ema20) });
-  if (ema50) overlays.push({ id: 'ema50', kind: 'ema', label: 'EMA 50', value: round(ema50) });
-  if (ema200) overlays.push({ id: 'ema200', kind: 'ema', label: 'EMA 200', value: round(ema200) });
+  if (ema20 !== undefined) overlays.push({ id: 'ema20', kind: 'ema', label: 'EMA 20', value: round(ema20) });
+  if (ema50 !== undefined) overlays.push({ id: 'ema50', kind: 'ema', label: 'EMA 50', value: round(ema50) });
+  if (ema200 !== undefined) overlays.push({ id: 'ema200', kind: 'ema', label: 'EMA 200', value: round(ema200) });
 
   supportLevels.forEach((value, index) => overlays.push({ id: `support-${index}`, kind: 'support', label: `S${index + 1}`, value: round(value) }));
   resistanceLevels.forEach((value, index) => overlays.push({ id: `resistance-${index}`, kind: 'resistance', label: `R${index + 1}`, value: round(value) }));
@@ -77,11 +89,11 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
     symbol,
     timeframe,
     currentPrice: round(currentPrice),
-    ema20: ema20 ? round(ema20) : undefined,
-    ema50: ema50 ? round(ema50) : undefined,
-    ema200: ema200 ? round(ema200) : undefined,
-    atr14: atr14 ? round(atr14) : undefined,
-    rsi14: rsi14 ? round(rsi14, 1) : undefined,
+    ema20: ema20 !== undefined ? round(ema20) : undefined,
+    ema50: ema50 !== undefined ? round(ema50) : undefined,
+    ema200: ema200 !== undefined ? round(ema200) : undefined,
+    atr14: atr14 !== undefined ? round(atr14) : undefined,
+    rsi14: rsi14 !== undefined ? round(rsi14, 1) : undefined,
     trend,
     structure,
     supportLevels: supportLevels.map((value) => round(value)),

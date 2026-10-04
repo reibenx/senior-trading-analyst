@@ -61,6 +61,34 @@ describe('revalidateCedearExecution', () => {
     expect(result.refreshedPlan?.quantity).toBe(100);
   });
 
+  it('allows an implied cable CCL when it remains close to the benchmark', () => {
+    const result = revalidateCedearExecution(intent(), conversion({
+      cclSource: 'IMPLIED_CABLE',
+      cableSymbol: 'NVDAC',
+      benchmarkCclArsPerUsd: 1590,
+      cclBenchmarkDeviationPercent: 0.63,
+    }), {
+      maxCclBenchmarkDeviationPercent: 2.5,
+    });
+    expect(result.readyToConfirm).toBe(true);
+    expect(result.status).toBe('READY_TO_CONFIRM');
+    expect(result.cclBenchmarkDeviationPercent).toBe(0.63);
+  });
+
+  it('blocks an implied cable CCL that diverges excessively from the benchmark', () => {
+    const result = revalidateCedearExecution(intent(), conversion({
+      cclSource: 'IMPLIED_CABLE',
+      cableSymbol: 'NVDAC',
+      benchmarkCclArsPerUsd: 1500,
+      cclBenchmarkDeviationPercent: 6.67,
+    }), {
+      maxCclBenchmarkDeviationPercent: 2.5,
+    });
+    expect(result.readyToConfirm).toBe(false);
+    expect(result.status).toBe('CCL_BENCHMARK_DIVERGED');
+    expect(result.cclBenchmarkDeviationPercent).toBe(6.67);
+  });
+
   it('blocks when the market is closed', () => {
     const result = revalidateCedearExecution(intent(), conversion({ marketStatus: 'CLOSED' }));
     expect(result.readyToConfirm).toBe(false);

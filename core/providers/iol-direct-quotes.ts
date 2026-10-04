@@ -3,12 +3,17 @@ import type {
   LocalQuoteProvider,
   LocalQuoteRecord,
 } from '@/core/providers/cedear-provider-contracts';
-import { getIolApiClient, type IolApiClient } from '@/core/providers/iol-api-client';
+import { getIolApiClient } from '@/core/providers/iol-api-client';
 import { getIolAssetMetadataProvider } from '@/core/providers/iol-asset-metadata';
+
+export interface IolQuoteJsonClient {
+  requestJson<T>(path: string, init?: RequestInit): Promise<T>;
+}
 
 interface IolQuoteResponse {
   ultimoPrecio?: number;
   fechaHora?: string;
+  fecha?: string;
   puntaCompra?: number;
   puntaVenta?: number;
   precioCompra?: number;
@@ -71,30 +76,42 @@ function oldestTimestamp(...timestamps: Array<string | undefined>): string {
   return valid[0] ?? new Date(0).toISOString();
 }
 
+function parseQuote(payload: IolQuoteResponse, symbol: string): ParsedQuote {
+  const price = finite(payload.ultimoPrecio);
+  const timestamp = payload.fechaHora ?? payload.fecha;
+  if (!price || !timestamp) throw new Error(`Invalid IOL quote payload for ${symbol}`);
+
+  const bid = finite(payload.puntaCompra)
+    ?? finite(payload.precioCompra)
+    ?? findPriceByKeys(payload.puntas, ['precioCompra', 'precio', 'compra']);
+  const ask = finite(payload.puntaVenta)
+    ?? finite(payload.precioVenta)
+    ?? findPriceByKeys(payload.puntas, ['precioVenta', 'precio', 'venta']);
+
+  return { price, timestamp, bid, ask };
+}
+
 export class IolDirectQuoteProvider implements LocalQuoteProvider {
   readonly id = 'iol-direct-quotes';
 
   constructor(
-    private readonly client: IolApiClient,
+    private readonly client: IolQuoteJsonClient,
     private readonly metadataProvider?: CedearAssetMetadataProvider,
   ) {}
 
   private async fetchQuote(symbol: string): Promise<ParsedQuote> {
-    const payload = await this.client.requestJson<IolQuoteResponse>(
-      `/api/v2/bCBA/Titulos/${encodeURIComponent(symbol)}/CotizacionDetalle`,
-    );
-    const price = finite(payload.ultimoPrecio);
-    const timestamp = payload.fechaHora;
-    if (!price || !timestamp) throw new Error(`Invalid IOL quote payload for ${symbol}`);
-
-    const bid = finite(payload.puntaCompra)
-      ?? finite(payload.precioCompra)
-      ?? findPriceByKeys(payload.puntas, ['precioCompra', 'precio', 'compra']);
-    const ask = finite(payload.puntaVenta)
-      ?? finite(payload.precioVenta)
-      ?? findPriceByKeys(payload.puntas, ['precioVenta', 'precio', 'venta']);
-
-    return { price, timestamp, bid, ask };
+    const encoded = encodeURIComponent(symbol);
+    try {
+      const detail = await this.client.requestJson<IolQuoteResponse>(
+        `/api/v2/bCBA/Titulos/${encoded}/CotizacionDetalle`,
+      );
+      return parseQuote(detail, symbol);
+    } catch {
+      const fallback = await this.client.requestJson<IolQuoteResponse>(
+        `/api/v2/bCBA/Titulos/${encoded}/Cotizacion`,
+      );
+      return parseQuote(fallback, symbol);
+    }
   }
 
   async getQuotes(symbols: string[]): Promise<LocalQuoteRecord[]> {

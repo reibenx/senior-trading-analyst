@@ -1,6 +1,7 @@
 import type { AlertEvent, Position } from '@/core/domain/trading';
 import type { LineOverlay, ZoneOverlay } from '@/core/domain/market';
 import type { FundamentalSnapshot } from '@/core/domain/fundamentals';
+import type { OrderDraft, OrderPlacementResult, OrderValidationResult } from '@/core/domain/orders';
 
 export interface FundamentalDataProvider {
   id: string;
@@ -10,6 +11,12 @@ export interface FundamentalDataProvider {
 export interface BrokerAdapter {
   id: string;
   getPositions(): Promise<Position[]>;
+}
+
+export interface BrokerOrderAdapter {
+  id: string;
+  validateOrder(order: OrderDraft): Promise<OrderValidationResult>;
+  placeValidatedOrder(validationId: string, order: OrderDraft): Promise<OrderPlacementResult>;
 }
 
 export interface NotificationProvider {

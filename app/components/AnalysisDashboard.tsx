@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { FundamentalScore, FundamentalSnapshot } from '@/core/domain/fundamentals';
@@ -36,10 +37,18 @@ interface PortfolioResponse {
   error?: string;
 }
 
+type AnalysisTab = 'summary' | 'technical' | 'fundamental' | 'risk';
+
 const STRATEGY_TIMEFRAMES: Record<Strategy, Timeframe[]> = {
   day: ['1m', '5m', '15m', '1h'],
   swing: ['1h', '4h', '1d', '1w'],
   position: ['1d', '1w', '1M'],
+};
+
+const STRATEGY_LABELS: Record<Strategy, { title: string; subtitle: string; icon: string }> = {
+  day: { title: 'Day Trading', subtitle: '1m / 5m / 15m', icon: '⌁' },
+  swing: { title: 'Swing Trading', subtitle: '1h / 4h / D', icon: '↗' },
+  position: { title: 'Position Trading', subtitle: 'D / W / M', icon: '⌁' },
 };
 
 function getLineValue(snapshot: TechnicalSnapshot, id: string): number | undefined {
@@ -61,6 +70,26 @@ function formatPercent(value: number | undefined) {
   return value === undefined ? '—' : `${(value * 100).toFixed(1)}%`;
 }
 
+function formatMoney(value: number | undefined, currency = 'USD') {
+  if (value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+}
+
+function formatCompact(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('es-AR', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function trendLabel(trend?: 'BULL' | 'NEUTRAL' | 'BEAR') {
+  if (trend === 'BULL') return 'Alcista';
+  if (trend === 'BEAR') return 'Bajista';
+  return 'Neutral';
+}
+
+function zoneText(zone?: ZoneOverlay) {
+  return zone ? `${zone.low.toFixed(2)} – ${zone.high.toFixed(2)}` : '—';
+}
+
 export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const [symbol, setSymbol] = useState(initialSnapshot.symbol);
   const [strategy, setStrategy] = useState<Strategy>('swing');
@@ -77,6 +106,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [portfolioConnected, setPortfolioConnected] = useState(false);
   const [portfolioBroker, setPortfolioBroker] = useState<string | null>(null);
+  const [analysisTab, setAnalysisTab] = useState<AnalysisTab>('summary');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,20 +116,20 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const stop = getLineValue(snapshot, 'stop');
   const tp1 = getLineValue(snapshot, 'tp1');
   const tp2 = getLineValue(snapshot, 'tp2');
+  const currentPrice = bars.at(-1)?.close ?? 0;
 
   const riskPlan = useMemo(() => {
     const parsedCapital = Number(capital.replace(',', '.'));
     const parsedRisk = Number(risk.replace(',', '.'));
     if (!entryA || stop === undefined) return null;
-
     return calculatePositionSizing({
       capital: parsedCapital,
       riskPercent: parsedRisk,
       entryPrice: entryA.high,
       stopPrice: stop,
-      targetPrice: tp1,
+      targetPrice: tp2 ?? tp1,
     });
-  }, [capital, risk, entryA, stop, tp1]);
+  }, [capital, risk, entryA, stop, tp1, tp2]);
 
   const riskRewardScore = riskPlan?.riskReward === undefined
     ? 0
@@ -111,9 +141,18 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
       : null
   ), [portfolioConnected, positions, snapshot.symbol]);
 
-  const alreadyOwned = useMemo(() => positions.some(
+  const activePosition = useMemo(() => positions.find(
     (position) => position.symbol.toUpperCase() === snapshot.symbol.toUpperCase() && position.quantity > 0,
   ), [positions, snapshot.symbol]);
+
+  const alreadyOwned = Boolean(activePosition);
+  const totalPortfolioValue = useMemo(() => positions.reduce((sum, position) => sum + (position.marketValue ?? 0), 0), [positions]);
+  const positionUnitPrice = activePosition?.marketValue && activePosition.quantity > 0
+    ? activePosition.marketValue / activePosition.quantity
+    : undefined;
+  const positionPnlPercent = activePosition?.averagePrice && positionUnitPrice
+    ? ((positionUnitPrice / activePosition.averagePrice) - 1) * 100
+    : undefined;
 
   const scoreCard = useMemo(() => calculateScores(strategy, {
     technical: technicalScore,
@@ -131,15 +170,14 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     alreadyOwned,
   }), [strategy, scoreCard, snapshot, alreadyOwned]);
 
-  const scores: Array<[string, number | null]> = [
-    ['Técnico', technicalScore],
-    ['Fundamental', fundamentalScore?.total ?? null],
-    ['Valuación', fundamentalScore?.valuation ?? null],
-    ['Mercado', marketContext?.score ?? null],
-    ['Riesgo / Retorno', riskRewardScore],
-    ['Portfolio Fit', portfolioFit?.portfolioFitScore ?? null],
-    ['Convicción', scoreCard.conviction],
-  ];
+  const decisionSecondary = decisionResult.headline === 'MANTENER' && entryA
+    ? 'AUMENTAR EN PULLBACK'
+    : decisionResult.headline;
+
+  const quickPositions = useMemo(() => [...positions]
+    .filter((position) => position.quantity > 0)
+    .sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0))
+    .slice(0, 7), [positions]);
 
   function onStrategyChange(nextStrategy: Strategy) {
     setStrategy(nextStrategy);
@@ -174,7 +212,6 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
       }
 
       const portfolio = (await portfolioResponse.json()) as PortfolioResponse;
-
       setSymbol(cleanSymbol);
       setBars(result.bars);
       setSnapshot(result.snapshot);
@@ -194,95 +231,158 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   }
 
   return (
-    <main>
-      <header className="topbar">
-        <strong>SENIOR TRADING ANALYST</strong>
-        <span>Market intelligence · Portfolio · Risk · Monitoring 24/7</span>
-        <em>ALPHA PREVIEW</em>
+    <main className="analystApp">
+      <header className="analystTopbar">
+        <div className="brandBlock">
+          <div className="brandMark">▥</div>
+          <div><strong>SENIOR TRADING ANALYST</strong><small>Análisis técnico + fundamental + tu cartera</small></div>
+        </div>
+        <nav className="primaryNav" aria-label="Navegación principal">
+          <Link className="active" href="/">⌁ Analizar Ticker</Link>
+          <Link href="/portfolio">▣ Mi Cartera (IOL)</Link>
+          <Link href="/portfolio">⌁ Oportunidades</Link>
+          <Link href="/activity">♧ Alertas</Link>
+          <Link href="/system">♡ Mercado</Link>
+        </nav>
+        <div className="topActions"><Link href="/system">⚙</Link><span>⌕ Buscar ticker…</span><b>TU</b></div>
       </header>
 
-      <section className="shell">
-        <aside className="panel controls">
-          <h2>Configurar análisis</h2>
-          <form onSubmit={handleAnalyze}>
-            <label>Ticker<input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} maxLength={20} /></label>
-            <label>Estrategia<select value={strategy} onChange={(event) => onStrategyChange(event.target.value as Strategy)}><option value="day">Day Trading</option><option value="swing">Swing Trading</option><option value="position">Position Trading</option></select></label>
-            <label>Timeframe<select value={timeframe} onChange={(event) => setTimeframe(event.target.value as Timeframe)}>{STRATEGY_TIMEFRAMES[strategy].map((item) => <option key={item} value={item}>{item.toUpperCase()}</option>)}</select></label>
-            <label>Capital disponible (USD)<input inputMode="decimal" value={capital} onChange={(event) => setCapital(event.target.value)} /></label>
-            <label>Riesgo máximo (%)<input inputMode="decimal" value={risk} onChange={(event) => setRisk(event.target.value)} /></label>
-            <button type="submit" disabled={loading}>{loading ? 'Analizando…' : 'Analizar'}</button>
-            {error ? <p className="formError" role="alert">{error}</p> : null}
-          </form>
+      <section className="analystGrid">
+        <aside className="analystSidebar">
+          <section className="surface configSurface">
+            <h2>1. Configuración</h2>
+            <form onSubmit={handleAnalyze}>
+              <label>Ticker<div className="tickerInput"><input value={symbol} onChange={(event) => setSymbol(event.target.value.toUpperCase())} maxLength={20} /><span>⌕</span></div></label>
+              <div className="tickerIdentity"><span className="tickerLogo">◉</span><div><b>{snapshot.symbol}</b><small>{fundamentals?.name ?? 'Activo seleccionado'}</small></div></div>
 
-          <div className="status"><b>Market Data</b><span>{source === 'demo-fixture' ? 'DEMO OHLCV · configurar TWELVE_DATA_API_KEY' : source}</span></div>
-          <div className="status"><b>Fundamentales</b><span>{fundamentalSource ?? 'Configurar ALPHA_VANTAGE_API_KEY'}</span></div>
-          <div className="status"><b>Market Context</b><span>{marketContext ? `SPY + ${marketContext.sectorSymbol ?? 'sector neutral'}` : 'Requiere market data real'}</span></div>
-          <div className="status"><b>IOL Portfolio</b><span>{portfolioConnected ? `${portfolioBroker ?? 'broker'} · ${positions.length} posiciones` : 'Bridge seguro no conectado'}</span></div>
-          <div className="status"><b>Monitoring Agent</b><span>Reglas + Telegram preparadas</span></div>
+              <label>Estrategia</label>
+              <div className="strategyGrid">
+                {(Object.keys(STRATEGY_LABELS) as Strategy[]).map((item) => (
+                  <button key={item} type="button" className={strategy === item ? 'selected' : ''} onClick={() => onStrategyChange(item)}>
+                    <span>{STRATEGY_LABELS[item].icon}</span><b>{STRATEGY_LABELS[item].title}</b><small>{STRATEGY_LABELS[item].subtitle}</small>
+                  </button>
+                ))}
+              </div>
+
+              <div className="configPair">
+                <label>Capital disponible (USD)<input inputMode="decimal" value={capital} onChange={(event) => setCapital(event.target.value)} /></label>
+                <label>Riesgo por operación<input inputMode="decimal" value={risk} onChange={(event) => setRisk(event.target.value)} /></label>
+              </div>
+              <div className="advancedHint">› Configuración avanzada</div>
+              <button className="analyzePrimary" type="submit" disabled={loading}>{loading ? 'Analizando…' : 'Analizar'}</button>
+              {error ? <p className="formError" role="alert">{error}</p> : null}
+            </form>
+          </section>
+
+          <section className="surface positionSurface">
+            <h2>Tu posición en IOL</h2>
+            {activePosition ? <>
+              <div className="positionSymbol"><span className="tickerLogo">◉</span><b>{activePosition.symbol} <small>({activePosition.assetType ?? 'IOL'})</small></b></div>
+              <dl>
+                <div><dt>Cantidad</dt><dd>{activePosition.quantity}</dd></div>
+                <div><dt>Precio promedio</dt><dd>{formatMoney(activePosition.averagePrice, activePosition.currency)}</dd></div>
+                <div><dt>Precio actual</dt><dd>{formatMoney(positionUnitPrice, activePosition.currency)}</dd></div>
+                <div><dt>Ganancia / Pérdida</dt><dd className={(positionPnlPercent ?? 0) >= 0 ? 'positive' : 'negative'}>{positionPnlPercent === undefined ? '—' : `${positionPnlPercent >= 0 ? '+' : ''}${positionPnlPercent.toFixed(1)}%`}</dd></div>
+                <div><dt>Valor de la posición</dt><dd>{formatMoney(activePosition.marketValue, activePosition.currency)}</dd></div>
+                <div><dt>Peso en la cartera</dt><dd>{portfolioFit ? `${portfolioFit.currentWeightPercent.toFixed(1)}%` : '—'}</dd></div>
+              </dl>
+              <div className="positionActions"><a href="https://www.invertironline.com" target="_blank" rel="noreferrer">Ver en IOL</a><Link href="/sandbox">Operar</Link></div>
+            </> : <p className="mutedText">{portfolioConnected ? 'El ticker no forma parte de tu cartera actual.' : 'La cartera IOL se carga al ejecutar el análisis.'}</p>}
+          </section>
+
+          <section className="surface quickSurface">
+            <h2>Lista rápida</h2>
+            <div className="quickTabs"><button className="active">Mis tickers</button><button>Watchlist</button></div>
+            {quickPositions.length ? quickPositions.map((position) => (
+              <button className="quickTicker" key={position.symbol} type="button" onClick={() => setSymbol(position.symbol)}>
+                <span>◉</span><b>{position.symbol}</b><small>{totalPortfolioValue > 0 && position.marketValue ? `${((position.marketValue / totalPortfolioValue) * 100).toFixed(1)}% cartera` : `${position.quantity} u.`}</small>
+              </button>
+            )) : <p className="mutedText">Analizá un ticker para cargar posiciones IOL.</p>}
+          </section>
         </aside>
 
-        <section className="workspace">
-          <div className="panel chart liveChart">
-            <div className="chartHead"><div><b>{snapshot.symbol}</b><small> {strategy.toUpperCase()} · {snapshot.timeframe.toUpperCase()}</small></div><span>Vista técnica · {source === 'demo-fixture' ? 'datos DEMO' : source}</span></div>
+        <section className="analystCenter">
+          <section className="surface chartSurface">
+            <div className="chartToolbar">
+              <div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item) => <button key={item} className={timeframe === item ? 'active' : ''} onClick={() => setTimeframe(item)}>{item === '1d' ? 'D' : item === '1w' ? 'S' : item === '1M' ? 'M' : item}</button>)}</div>
+              <div className="chartTools"><span>⌁ Indicadores</span><span>⌁ Dibujos</span><span>◉ Comparar</span><span>⚙</span><span>⛶</span></div>
+            </div>
+            <div className="instrumentStrip">
+              <div><span className="tickerLogo">◉</span><b>{fundamentals?.name ?? snapshot.symbol}</b><small> · {snapshot.timeframe.toUpperCase()} · {fundamentals?.sector ?? 'Mercado'}</small></div>
+              <div className="priceStrip"><b>{currentPrice.toFixed(2)}</b><span>{snapshot.trend === 'BULL' ? 'Tendencia alcista' : snapshot.trend === 'BEAR' ? 'Tendencia bajista' : 'Tendencia neutral'}</span></div>
+            </div>
             <TechnicalChart bars={bars} snapshot={snapshot} />
-          </div>
+            <div className="chartFooter"><span>1D</span><span>5D</span><span>1M</span><span>3M</span><span>6M</span><span>YTD</span><span>1A</span><span>5A</span><span>Todos</span><small>{source === 'demo-fixture' ? 'DEMO' : source}</small></div>
+          </section>
 
-          <div className="scoreGrid">
-            {scores.map(([name, value]) => <div className="panel score" key={name}><span>{name}</span><strong>{value ?? '—'}</strong></div>)}
-          </div>
+          <section className="surface researchSurface">
+            <h2>Análisis y fundamentos</h2>
+            <div className="researchTabs"><button className="active">Resumen</button><button>Fundamental</button><button>Valuación</button><button>Expectativas</button><button>Sector</button><button>Riesgos</button></div>
+            <div className="researchGrid">
+              <div className="thesisBlock">
+                <h3>Tesis de inversión</h3>
+                <p>{decisionResult.reasons.length ? decisionResult.reasons.join(' ') : 'La tesis se construirá con la siguiente actualización de datos técnicos y fundamentales.'}</p>
+                <div className="thesisCards">
+                  <div className="catalystCard"><h4>Catalizadores</h4>{marketContext?.reasons.slice(0, 3).map((reason) => <p key={reason}>• {reason}</p>) ?? <p>• Pendiente de contexto de mercado</p>}</div>
+                  <div className="riskCard"><h4>Riesgos</h4>{decisionResult.warnings.length ? decisionResult.warnings.slice(0, 3).map((warning) => <p key={warning}>• {warning}</p>) : <p>• Sin advertencias extraordinarias del modelo</p>}</div>
+                </div>
+              </div>
+              <div className="fundamentalBlock">
+                <div className="fundamentalScoreHead"><h3>Fundamental Score</h3><strong>{fundamentalScore?.total ?? '—'}<small>/100</small></strong></div>
+                {[['Quality', fundamentalScore?.quality], ['Growth', fundamentalScore?.growth], ['Valuation', fundamentalScore?.valuation], ['Mercado', marketContext?.score]].map(([label, value]) => (
+                  <div className="scoreBarRow" key={String(label)}><span>{label}</span><div><i style={{ width: `${typeof value === 'number' ? value : 0}%` }} /></div><b>{typeof value === 'number' ? value : '—'}</b></div>
+                ))}
+                <h4>Datos clave</h4>
+                <div className="keyDataGrid">
+                  <div><span>Market Cap</span><b>{formatCompact(fundamentals?.marketCap)}</b></div>
+                  <div><span>ROE</span><b>{formatPercent(fundamentals?.returnOnEquity)}</b></div>
+                  <div><span>P/E (ttm)</span><b>{formatRatio(fundamentals?.trailingPE)}</b></div>
+                  <div><span>Margen neto</span><b>{formatPercent(fundamentals?.profitMargin)}</b></div>
+                  <div><span>Forward P/E</span><b>{formatRatio(fundamentals?.forwardPE)}</b></div>
+                  <div><span>PEG</span><b>{formatRatio(fundamentals?.pegRatio)}</b></div>
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
 
-        <aside className="panel decision">
-          <span className="eyebrow">DECISIÓN {source === 'demo-fixture' ? 'DEMO' : ''}</span>
-          <h1>{decisionResult.headline}</h1>
-          <h3>{strategy.toUpperCase()} · convicción {scoreCard.conviction}/100</h3>
-          <div className="conviction"><span>Modelo</span><b>{scoreCard.conviction}/100</b></div>
+        <aside className="analystRight">
+          <section className="surface decisionSurface">
+            <div className="rightTitle"><h2>{snapshot.symbol} - Análisis Integral</h2><div className="rightTabs">{(['summary', 'technical', 'fundamental', 'risk'] as AnalysisTab[]).map((tab) => <button key={tab} className={analysisTab === tab ? 'active' : ''} onClick={() => setAnalysisTab(tab)}>{tab === 'summary' ? 'Resumen' : tab === 'technical' ? 'Técnico' : tab === 'fundamental' ? 'Fundamental' : 'Riesgo'}</button>)}</div></div>
 
-          <hr /><h3>Plan técnico automático</h3>
-          <p>Entry A <b>{entryA ? `$${entryA.low.toFixed(2)}–$${entryA.high.toFixed(2)}` : '—'}</b></p>
-          <p>Entry B <b>{entryB ? `$${entryB.low.toFixed(2)}–$${entryB.high.toFixed(2)}` : '—'}</b></p>
-          <p>Stop <b>{stop !== undefined ? `$${stop.toFixed(2)}` : '—'}</b></p><p>TP1 <b>{tp1 !== undefined ? `$${tp1.toFixed(2)}` : '—'}</b></p><p>TP2 <b>{tp2 !== undefined ? `$${tp2.toFixed(2)}` : '—'}</b></p>
+            <div className="decisionHero">
+              <div><small>DECISIÓN</small><h1>{decisionResult.headline}</h1><h3>{decisionSecondary}</h3></div>
+              <div className="gauge" style={{ background: `conic-gradient(#3ee1a5 0 ${scoreCard.conviction}%, #143245 ${scoreCard.conviction}% 100%)` }}><div><b>{scoreCard.conviction}</b><small>/100</small></div></div>
+              <p>{analysisTab === 'technical' ? `Tendencia ${snapshot.trend.toLowerCase()}, estructura ${snapshot.structure.toLowerCase()}, RSI14 ${snapshot.rsi14 ?? '—'} y ATR14 ${snapshot.atr14 ?? '—'}.` : analysisTab === 'fundamental' ? (fundamentals ? `${fundamentals.name ?? fundamentals.symbol}: quality ${fundamentalScore?.quality ?? '—'}, growth ${fundamentalScore?.growth ?? '—'} y valuation ${fundamentalScore?.valuation ?? '—'}.` : 'Fundamentales pendientes de proveedor.') : analysisTab === 'risk' ? `Riesgo máximo configurado: ${risk}% del capital. ${riskPlan ? `R/R estimado: 1:${riskPlan.riskReward.toFixed(1)}.` : ''}` : (decisionResult.reasons.join(' ') || 'Esperando una nueva lectura del modelo.')}</p>
+            </div>
 
-          <hr /><h3>Cartera</h3>
-          {portfolioFit ? (
-            <>
-              <p>Estado <b>{alreadyOwned ? 'POSICIÓN EXISTENTE' : 'NO EN CARTERA'}</b></p>
-              <p>Peso actual <b>{portfolioFit.currentWeightPercent.toFixed(1)}%</b></p>
-              <p>Portfolio Fit <b>{portfolioFit.portfolioFitScore}/100</b></p>
-              {portfolioFit.reasons.map((reason) => <p key={reason}>• {reason}</p>)}
-              <p><small>El peso proyectado post-compra se habilitará al normalizar CEDEAR/CCL y moneda del plan.</small></p>
-            </>
-          ) : <p>Conectá el bridge IOL para incorporar concentración y posición real a la decisión.</p>}
+            <div className="scoreTiles">
+              <div><span>Técnico</span><b>{technicalScore}</b></div><div><span>Fundamental</span><b>{fundamentalScore?.total ?? '—'}</b></div><div><span>Valuación</span><b>{fundamentalScore?.valuation ?? '—'}</b></div><div><span>Mercado</span><b>{marketContext?.score ?? '—'}</b></div><div><span>Riesgo</span><b>{riskRewardScore}</b></div>
+            </div>
 
-          <hr /><h3>Razonamiento del modelo</h3>
-          {decisionResult.reasons.length ? decisionResult.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin señales positivas suficientes.</p>}
-          {decisionResult.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
+            <div className="rightColumns">
+              <div className="levelsCard"><h3>Niveles Clave (USD - subyacente)</h3><dl><div><dt>Precio actual</dt><dd>{currentPrice.toFixed(2)}</dd></div><div><dt>Zona de entrada A</dt><dd>{zoneText(entryA)}</dd></div><div><dt>Zona de entrada B</dt><dd>{zoneText(entryB)}</dd></div><div className="danger"><dt>Stop / Invalidación</dt><dd>{stop?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP1</dt><dd>{tp1?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP2</dt><dd>{tp2?.toFixed(2) ?? '—'}</dd></div></dl></div>
+              <div className="managementCard"><h3>Gestión de posición</h3>{riskPlan ? <dl><div><dt>Riesgo por unidad</dt><dd>{formatMoney(riskPlan.riskPerUnit)}</dd></div><div><dt>Tamaño máximo</dt><dd>{riskPlan.quantity} acciones</dd></div><div><dt>Riesgo total</dt><dd>{formatMoney(riskPlan.riskBudget)}</dd></div><div><dt>Risk / Reward</dt><dd>1 : {riskPlan.riskReward.toFixed(1)}</dd></div></dl> : <p className="mutedText">Se calculará al disponer de entrada y stop.</p>}<h4>Estrategia de salida</h4><p>• 25% en TP1<br />• 25% en TP2<br />• 50% runner con trailing estructural</p></div>
+            </div>
+          </section>
 
-          <hr /><h3>Contexto de mercado</h3>
-          {marketContext ? marketContext.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin contexto externo todavía; el componente Mercado permanece neutral.</p>}
+          <section className="surface marketSurface">
+            <h2>Contexto de Mercado</h2>
+            {marketContext ? <>
+              <div className="marketRow"><span>◎ {marketContext.benchmarkSymbol}</span><b>{trendLabel(marketContext.benchmarkTrend)}</b><small>Score {marketContext.score}</small></div>
+              <div className="marketRow"><span>◎ {marketContext.sectorSymbol ?? 'Sector'}</span><b>{trendLabel(marketContext.sectorTrend)}</b><small>Contexto sectorial</small></div>
+              {marketContext.reasons.slice(0, 3).map((reason) => <div className="marketReason" key={reason}>• {reason}</div>)}
+            </> : <p className="mutedText">Contexto pendiente de datos reales.</p>}
+          </section>
 
-          <hr /><h3>Diagnóstico técnico</h3>
-          <p>Tendencia <b>{snapshot.trend}</b> · estructura <b>{snapshot.structure}</b>.</p>
-          <p>EMA20 <b>{snapshot.ema20 ?? '—'}</b> · EMA50 <b>{snapshot.ema50 ?? '—'}</b> · EMA200 <b>{snapshot.ema200 ?? '—'}</b>.</p>
-          <p>RSI14 <b>{snapshot.rsi14 ?? '—'}</b> · ATR14 <b>{snapshot.atr14 ?? '—'}</b>.</p>
-
-          <hr /><h3>Fundamentales</h3>
-          {fundamentals && fundamentalScore ? (
-            <>
-              <p>{fundamentals.name ?? fundamentals.symbol} <b>{fundamentals.sector ?? ''}</b></p>
-              <p>Quality <b>{fundamentalScore.quality}/100</b> · Growth <b>{fundamentalScore.growth}/100</b></p>
-              <p>Forward P/E <b>{formatRatio(fundamentals.forwardPE)}</b> · PEG <b>{formatRatio(fundamentals.pegRatio)}</b></p>
-              <p>ROE <b>{formatPercent(fundamentals.returnOnEquity)}</b> · margen neto <b>{formatPercent(fundamentals.profitMargin)}</b></p>
-              <p>Revenue YoY <b>{formatPercent(fundamentals.revenueGrowthYoY)}</b> · EPS YoY <b>{formatPercent(fundamentals.earningsGrowthYoY)}</b></p>
-            </>
-          ) : <p>Sin proveedor fundamental configurado; se usa un valor neutral en el score.</p>}
-
-          <hr /><h3>Gestión de riesgo</h3>
-          {riskPlan ? <><p>Presupuesto de riesgo <b>USD {riskPlan.riskBudget.toFixed(2)}</b></p><p>Riesgo por unidad <b>USD {riskPlan.riskPerUnit.toFixed(2)}</b></p><p>Tamaño máximo <b>{riskPlan.quantity} unidades</b></p><p>Capital utilizado <b>USD {riskPlan.positionValue.toFixed(2)} ({riskPlan.capitalUtilizationPercent}%)</b></p><p>R/R a TP1 <b>{riskPlan.riskReward !== undefined ? `1:${riskPlan.riskReward.toFixed(2)}` : '—'}</b></p></> : <p>Ingresá capital y riesgo válidos para calcular position sizing.</p>}
-
-          <hr /><h3>Qué invalida la tesis</h3><p>Ruptura estructural, pérdida del stop técnico, deterioro fundamental o cambio relevante del régimen de mercado.</p>
+          <section className="surface eventsSurface">
+            <div className="sectionHead"><h2>Próximos eventos</h2><span>Proveedor pendiente</span></div>
+            <div className="eventPlaceholder"><b>Resultados · dividendos · Investor Day</b><small>Se habilitarán al incorporar calendario corporativo verificado.</small></div>
+          </section>
         </aside>
       </section>
+
+      <footer className="analystFooter"><span>{portfolioConnected ? `${portfolioBroker ?? 'IOL'} · ${positions.length} posiciones conectadas` : 'IOL se carga al analizar'}</span><span>Redis + Telegram + Monitor 24/7</span><span>{fundamentalSource ?? 'Fundamentales pendientes'}</span></footer>
     </main>
   );
 }

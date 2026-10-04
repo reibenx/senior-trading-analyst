@@ -1,0 +1,28 @@
+name: Market Monitor
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Run monitoring scan
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          MONITOR_CRON_TOKEN: ${{ secrets.MONITOR_CRON_TOKEN }}
+        run: |
+          if [ -z "$APP_BASE_URL" ] || [ -z "$MONITOR_CRON_TOKEN" ]; then
+            echo "Monitoring secrets are not configured; skipping scan."
+            exit 0
+          fi
+
+          BASE="${APP_BASE_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --max-time 540 \
+            -X POST "$BASE/api/monitor/scan" \
+            -H "Authorization: Bearer $MONITOR_CRON_TOKEN" \
+            -H "Content-Type: application/json"

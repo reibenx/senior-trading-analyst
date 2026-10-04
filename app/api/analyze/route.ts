@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { buildTechnicalSnapshot } from '@/core/engines/technical';
+import { calculateFundamentalScore } from '@/core/engines/fundamental-score';
 import { getMarketDataProvider } from '@/core/providers/market-provider';
+import { getFundamentalProvider } from '@/core/providers/alpha-vantage-fundamentals';
 
 const requestSchema = z.object({
   symbol: z.string().trim().min(1).max(20).transform((value) => value.toUpperCase()),
@@ -11,11 +13,27 @@ const requestSchema = z.object({
 export async function POST(request: Request) {
   try {
     const payload = requestSchema.parse(await request.json());
-    const provider = getMarketDataProvider();
-    const bars = await provider.getBars({ symbol: payload.symbol, timeframe: payload.timeframe, limit: 260 });
-    const snapshot = buildTechnicalSnapshot({ symbol: payload.symbol, timeframe: payload.timeframe, bars });
+    const marketProvider = getMarketDataProvider();
+    const fundamentalProvider = getFundamentalProvider();
 
-    return NextResponse.json({ source: provider.id, bars, snapshot });
+    const [bars, fundamentalSnapshot] = await Promise.all([
+      marketProvider.getBars({ symbol: payload.symbol, timeframe: payload.timeframe, limit: 260 }),
+      fundamentalProvider
+        ? fundamentalProvider.getFundamentals(payload.symbol).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    const snapshot = buildTechnicalSnapshot({ symbol: payload.symbol, timeframe: payload.timeframe, bars });
+    const fundamentalScore = fundamentalSnapshot ? calculateFundamentalScore(fundamentalSnapshot) : null;
+
+    return NextResponse.json({
+      source: marketProvider.id,
+      bars,
+      snapshot,
+      fundamentals: fundamentalSnapshot,
+      fundamentalScore,
+      fundamentalSource: fundamentalProvider?.id ?? null,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid analysis request', details: error.issues }, { status: 400 });

@@ -1,5 +1,6 @@
 import './globals.css';
 import './enhancements.css';
+import './analyst-dashboard.css';
 import { AppNav } from '@/app/components/AppNav';
 
 export const metadata = { title: 'Senior Trading Analyst', description: 'Trading intelligence and portfolio decision platform' };

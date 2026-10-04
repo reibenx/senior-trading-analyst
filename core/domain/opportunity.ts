@@ -27,6 +27,24 @@ export interface PortfolioOpportunity {
   plan: TradePlan;
 }
 
+export interface MonthlyAllocationItem {
+  symbol: string;
+  allocationPercent: number;
+  allocationAmount: number;
+  opportunityScore: number;
+  currentWeightPercent: number;
+  rationale: string;
+}
+
+export interface MonthlyAllocationPlan {
+  capital: number;
+  currency: 'USD';
+  allocated: number;
+  cashReserve: number;
+  items: MonthlyAllocationItem[];
+  notes: string[];
+}
+
 export interface PortfolioOpportunitySummary {
   generatedAt: string;
   strategy: Strategy;
@@ -34,5 +52,6 @@ export interface PortfolioOpportunitySummary {
   analyzed: number;
   failed: number;
   opportunities: PortfolioOpportunity[];
+  allocationPlan?: MonthlyAllocationPlan;
   errors: Array<{ symbol: string; error: string }>;
 }

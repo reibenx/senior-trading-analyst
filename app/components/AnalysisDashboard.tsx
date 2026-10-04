@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { FundamentalScore, FundamentalSnapshot } from '@/core/domain/fundamentals';
+import type { MarketContextSnapshot } from '@/core/domain/market-context';
 import type { LineOverlay, OHLCVBar, TechnicalSnapshot, Timeframe, ZoneOverlay } from '@/core/domain/market';
 import type { Strategy } from '@/core/domain/trading';
 import { decide } from '@/core/engines/decision';
@@ -22,6 +23,7 @@ interface AnalyzeResponse {
   fundamentals?: FundamentalSnapshot | null;
   fundamentalScore?: FundamentalScore | null;
   fundamentalSource?: string | null;
+  marketContext?: MarketContextSnapshot | null;
   error?: string;
 }
 
@@ -62,6 +64,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const [fundamentals, setFundamentals] = useState<FundamentalSnapshot | null>(null);
   const [fundamentalScore, setFundamentalScore] = useState<FundamentalScore | null>(null);
   const [fundamentalSource, setFundamentalSource] = useState<string | null>(null);
+  const [marketContext, setMarketContext] = useState<MarketContextSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,10 +97,10 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     technical: technicalScore,
     fundamental: fundamentalScore?.total ?? 50,
     valuation: fundamentalScore?.valuation ?? 50,
-    market: 50,
+    market: marketContext?.score ?? 50,
     riskReward: riskRewardScore,
     portfolioFit: 50,
-  }), [strategy, technicalScore, fundamentalScore, riskRewardScore]);
+  }), [strategy, technicalScore, fundamentalScore, marketContext, riskRewardScore]);
 
   const decisionResult = useMemo(() => decide({
     strategy,
@@ -110,7 +113,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     ['Técnico', technicalScore],
     ['Fundamental', fundamentalScore?.total ?? null],
     ['Valuación', fundamentalScore?.valuation ?? null],
-    ['Mercado*', null],
+    ['Mercado', marketContext?.score ?? null],
     ['Riesgo / Retorno', riskRewardScore],
     ['Convicción*', scoreCard.conviction],
   ];
@@ -136,7 +139,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: cleanSymbol, timeframe }),
+        body: JSON.stringify({ symbol: cleanSymbol, strategy, timeframe }),
       });
 
       const result = (await response.json()) as AnalyzeResponse;
@@ -151,6 +154,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
       setFundamentals(result.fundamentals ?? null);
       setFundamentalScore(result.fundamentalScore ?? null);
       setFundamentalSource(result.fundamentalSource ?? null);
+      setMarketContext(result.marketContext ?? null);
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : 'Error inesperado al analizar el ticker.');
     } finally {
@@ -181,6 +185,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
 
           <div className="status"><b>Market Data</b><span>{source === 'demo-fixture' ? 'DEMO OHLCV · configurar TWELVE_DATA_API_KEY' : source}</span></div>
           <div className="status"><b>Fundamentales</b><span>{fundamentalSource ?? 'Configurar ALPHA_VANTAGE_API_KEY'}</span></div>
+          <div className="status"><b>Market Context</b><span>{marketContext ? `SPY + ${marketContext.sectorSymbol ?? 'sector neutral'}` : 'Requiere market data real'}</span></div>
           <div className="status"><b>IOL Portfolio</b><span>Puente seguro pendiente</span></div>
           <div className="status"><b>Monitoring Agent</b><span>Arquitectura 24/7 preparada</span></div>
         </aside>
@@ -211,6 +216,9 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
           {decisionResult.reasons.length ? decisionResult.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin señales positivas suficientes.</p>}
           {decisionResult.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
 
+          <hr /><h3>Contexto de mercado</h3>
+          {marketContext ? marketContext.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin contexto externo todavía; el componente Mercado permanece neutral.</p>}
+
           <hr /><h3>Diagnóstico técnico</h3>
           <p>Tendencia <b>{snapshot.trend}</b> · estructura <b>{snapshot.structure}</b>.</p>
           <p>EMA20 <b>{snapshot.ema20 ?? '—'}</b> · EMA50 <b>{snapshot.ema50 ?? '—'}</b> · EMA200 <b>{snapshot.ema200 ?? '—'}</b>.</p>
@@ -231,7 +239,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
           {riskPlan ? <><p>Presupuesto de riesgo <b>USD {riskPlan.riskBudget.toFixed(2)}</b></p><p>Riesgo por unidad <b>USD {riskPlan.riskPerUnit.toFixed(2)}</b></p><p>Tamaño máximo <b>{riskPlan.quantity} unidades</b></p><p>Capital utilizado <b>USD {riskPlan.positionValue.toFixed(2)} ({riskPlan.capitalUtilizationPercent}%)</b></p><p>R/R a TP1 <b>{riskPlan.riskReward !== undefined ? `1:${riskPlan.riskReward.toFixed(2)}` : '—'}</b></p></> : <p>Ingresá capital y riesgo válidos para calcular position sizing.</p>}
 
           <hr /><h3>Qué invalida la tesis</h3><p>Ruptura estructural, pérdida del stop técnico, deterioro fundamental o cambio relevante del régimen de mercado.</p>
-          <p><small>* Mercado y Portfolio Fit permanecen neutrales hasta conectar contexto macro/sector y la cartera IOL; por eso la convicción se muestra como provisional.</small></p>
+          <p><small>* Portfolio Fit permanece neutral hasta conectar la cartera IOL; por eso la convicción aún se muestra como provisional.</small></p>
         </aside>
       </section>
     </main>

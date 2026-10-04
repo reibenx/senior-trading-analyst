@@ -14,11 +14,17 @@ export async function POST(request: Request) {
     // Temporal: fixture determinístico hasta conectar un MarketDataProvider real.
     const bars = createDemoBars();
     const snapshot = buildTechnicalSnapshot({ symbol: payload.symbol, timeframe: payload.timeframe, bars });
-    return NextResponse.json({ source: 'demo-fixture', snapshot });
+
+    return NextResponse.json({
+      source: 'demo-fixture',
+      bars,
+      snapshot,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid analysis request', details: error.issues }, { status: 400 });
     }
+
     return NextResponse.json({ error: 'Unable to analyze symbol' }, { status: 500 });
   }
 }

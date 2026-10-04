@@ -17,12 +17,13 @@ export interface AnalyzeSymbolInput {
   strategy: Strategy;
   timeframe: Timeframe;
   includeSectorContext?: boolean;
+  includeFundamentals?: boolean;
 }
 
 export async function analyzeSymbol(input: AnalyzeSymbolInput) {
   const symbol = input.symbol.trim().toUpperCase();
   const marketProvider = getMarketDataProvider();
-  const fundamentalProvider = getFundamentalProvider();
+  const fundamentalProvider = input.includeFundamentals === false ? null : getFundamentalProvider();
 
   const [bars, fundamentalSnapshot] = await Promise.all([
     marketProvider.getBars({ symbol, timeframe: input.timeframe, limit: 260 }),

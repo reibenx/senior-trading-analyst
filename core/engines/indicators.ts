@@ -1,4 +1,4 @@
-import type { OHLCVBar } from '@/core/domain/market';
+import type { IndicatorPoint, OHLCVBar } from '@/core/domain/market';
 
 export function sma(values: number[], period: number): number | undefined {
   if (period <= 0 || values.length < period) return undefined;
@@ -48,8 +48,8 @@ export function rsi(values: number[], period = 14): number | undefined {
   return 100 - 100 / (1 + rs);
 }
 
-function pivotLowsChronological(bars: OHLCVBar[], window: number): number[] {
-  const pivots: number[] = [];
+function pivotLowPointsChronological(bars: OHLCVBar[], window: number): IndicatorPoint[] {
+  const pivots: IndicatorPoint[] = [];
   for (let i = window; i < bars.length - window; i += 1) {
     const low = bars[i].low;
     let isPivot = true;
@@ -59,13 +59,13 @@ function pivotLowsChronological(bars: OHLCVBar[], window: number): number[] {
         break;
       }
     }
-    if (isPivot) pivots.push(low);
+    if (isPivot) pivots.push({ time: bars[i].time, value: low });
   }
   return pivots;
 }
 
-function pivotHighsChronological(bars: OHLCVBar[], window: number): number[] {
-  const pivots: number[] = [];
+function pivotHighPointsChronological(bars: OHLCVBar[], window: number): IndicatorPoint[] {
+  const pivots: IndicatorPoint[] = [];
   for (let i = window; i < bars.length - window; i += 1) {
     const high = bars[i].high;
     let isPivot = true;
@@ -75,17 +75,25 @@ function pivotHighsChronological(bars: OHLCVBar[], window: number): number[] {
         break;
       }
     }
-    if (isPivot) pivots.push(high);
+    if (isPivot) pivots.push({ time: bars[i].time, value: high });
   }
   return pivots;
 }
 
-export function recentPivotLows(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+export function recentPivotLowPoints(bars: OHLCVBar[], window = 3, limit = 3): IndicatorPoint[] {
   if (window < 1 || limit < 1) return [];
-  return pivotLowsChronological(bars, window).slice(-limit);
+  return pivotLowPointsChronological(bars, window).slice(-limit);
+}
+
+export function recentPivotHighPoints(bars: OHLCVBar[], window = 3, limit = 3): IndicatorPoint[] {
+  if (window < 1 || limit < 1) return [];
+  return pivotHighPointsChronological(bars, window).slice(-limit);
+}
+
+export function recentPivotLows(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+  return recentPivotLowPoints(bars, window, limit).map((point) => point.value);
 }
 
 export function recentPivotHighs(bars: OHLCVBar[], window = 3, limit = 3): number[] {
-  if (window < 1 || limit < 1) return [];
-  return pivotHighsChronological(bars, window).slice(-limit);
+  return recentPivotHighPoints(bars, window, limit).map((point) => point.value);
 }

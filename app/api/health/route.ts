@@ -17,6 +17,7 @@ export async function GET() {
     process.env.IOL_ASSET_METADATA_BRIDGE_URL?.trim()
     || process.env.IOL_BRIDGE_URL?.trim(),
   );
+  const metadataAvailable = directIol || metadataBridge;
   const allInOneCedear = configured('CEDEAR_CONVERSION_BRIDGE_URL');
   const quoteAvailable = directIol
     || Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
@@ -41,9 +42,9 @@ export async function GET() {
       mode: directIol ? 'direct-api' : quoteAvailable ? 'bridge' : 'unconfigured',
     },
     iolAssetMetadata: {
-      ready: metadataBridge,
-      mode: metadataBridge ? 'bridge' : 'unconfigured',
-      purpose: 'explicit ARS/D/cable related symbols',
+      ready: metadataAvailable,
+      mode: directIol ? 'direct-api:validated-related-symbols' : metadataBridge ? 'bridge' : 'unconfigured',
+      purpose: 'validated ARS/D/cable related symbols',
     },
     cedearRatios: {
       ready: ratioReady,
@@ -71,7 +72,7 @@ export async function GET() {
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,
       mode: allInOneCedear ? 'all-in-one' : compositeCedear ? 'composite' : 'unconfigured',
-      impliedCableCcl: directIol && metadataBridge,
+      impliedCableCcl: directIol && metadataAvailable,
       globalCclBenchmark: configured('CCL_BRIDGE_URL'),
     },
     alertState: { ready: redisReady, mode: redisReady ? redis?.source : 'unconfigured' },

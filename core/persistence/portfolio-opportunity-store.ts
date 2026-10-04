@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { PortfolioOpportunity } from '@/core/domain/opportunity';
 import type { Position, Strategy } from '@/core/domain/trading';
+import { getRedisRestConfig } from '@/core/persistence/redis-env';
 
 export interface PortfolioOpportunityStore {
   getMany(strategy: Strategy, portfolioFingerprint: string, symbols: string[]): Promise<Map<string, PortfolioOpportunity>>;
@@ -81,10 +82,9 @@ export class UpstashPortfolioOpportunityStore implements PortfolioOpportunitySto
 }
 
 export function getPortfolioOpportunityStore(): PortfolioOpportunityStore | null {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!restUrl || !token) return null;
-  return new UpstashPortfolioOpportunityStore(restUrl, token);
+  const redis = getRedisRestConfig();
+  if (!redis) return null;
+  return new UpstashPortfolioOpportunityStore(redis.restUrl, redis.token);
 }
 
 export function portfolioOpportunityTtlSeconds(strategy: Strategy) {

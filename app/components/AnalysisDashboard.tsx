@@ -90,6 +90,10 @@ function zoneText(zone?: ZoneOverlay) {
   return zone ? `${zone.low.toFixed(2)} – ${zone.high.toFixed(2)}` : '—';
 }
 
+function riskRewardText(value: number | undefined) {
+  return value === undefined ? '—' : `1 : ${value.toFixed(1)}`;
+}
+
 export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const [symbol, setSymbol] = useState(initialSnapshot.symbol);
   const [strategy, setStrategy] = useState<Strategy>('swing');
@@ -334,7 +338,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
                 ))}
                 <h4>Datos clave</h4>
                 <div className="keyDataGrid">
-                  <div><span>Market Cap</span><b>{formatCompact(fundamentals?.marketCap)}</b></div>
+                  <div><span>Market Cap</span><b>{formatCompact(fundamentals?.marketCapitalization)}</b></div>
                   <div><span>ROE</span><b>{formatPercent(fundamentals?.returnOnEquity)}</b></div>
                   <div><span>P/E (ttm)</span><b>{formatRatio(fundamentals?.trailingPE)}</b></div>
                   <div><span>Margen neto</span><b>{formatPercent(fundamentals?.profitMargin)}</b></div>
@@ -353,7 +357,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
             <div className="decisionHero">
               <div><small>DECISIÓN</small><h1>{decisionResult.headline}</h1><h3>{decisionSecondary}</h3></div>
               <div className="gauge" style={{ background: `conic-gradient(#3ee1a5 0 ${scoreCard.conviction}%, #143245 ${scoreCard.conviction}% 100%)` }}><div><b>{scoreCard.conviction}</b><small>/100</small></div></div>
-              <p>{analysisTab === 'technical' ? `Tendencia ${snapshot.trend.toLowerCase()}, estructura ${snapshot.structure.toLowerCase()}, RSI14 ${snapshot.rsi14 ?? '—'} y ATR14 ${snapshot.atr14 ?? '—'}.` : analysisTab === 'fundamental' ? (fundamentals ? `${fundamentals.name ?? fundamentals.symbol}: quality ${fundamentalScore?.quality ?? '—'}, growth ${fundamentalScore?.growth ?? '—'} y valuation ${fundamentalScore?.valuation ?? '—'}.` : 'Fundamentales pendientes de proveedor.') : analysisTab === 'risk' ? `Riesgo máximo configurado: ${risk}% del capital. ${riskPlan ? `R/R estimado: 1:${riskPlan.riskReward.toFixed(1)}.` : ''}` : (decisionResult.reasons.join(' ') || 'Esperando una nueva lectura del modelo.')}</p>
+              <p>{analysisTab === 'technical' ? `Tendencia ${snapshot.trend.toLowerCase()}, estructura ${snapshot.structure.toLowerCase()}, RSI14 ${snapshot.rsi14 ?? '—'} y ATR14 ${snapshot.atr14 ?? '—'}.` : analysisTab === 'fundamental' ? (fundamentals ? `${fundamentals.name ?? fundamentals.symbol}: quality ${fundamentalScore?.quality ?? '—'}, growth ${fundamentalScore?.growth ?? '—'} y valuation ${fundamentalScore?.valuation ?? '—'}.` : 'Fundamentales pendientes de proveedor.') : analysisTab === 'risk' ? `Riesgo máximo configurado: ${risk}% del capital. ${riskPlan?.riskReward !== undefined ? `R/R estimado: ${riskRewardText(riskPlan.riskReward)}.` : ''}` : (decisionResult.reasons.join(' ') || 'Esperando una nueva lectura del modelo.')}</p>
             </div>
 
             <div className="scoreTiles">
@@ -362,7 +366,7 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
 
             <div className="rightColumns">
               <div className="levelsCard"><h3>Niveles Clave (USD - subyacente)</h3><dl><div><dt>Precio actual</dt><dd>{currentPrice.toFixed(2)}</dd></div><div><dt>Zona de entrada A</dt><dd>{zoneText(entryA)}</dd></div><div><dt>Zona de entrada B</dt><dd>{zoneText(entryB)}</dd></div><div className="danger"><dt>Stop / Invalidación</dt><dd>{stop?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP1</dt><dd>{tp1?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP2</dt><dd>{tp2?.toFixed(2) ?? '—'}</dd></div></dl></div>
-              <div className="managementCard"><h3>Gestión de posición</h3>{riskPlan ? <dl><div><dt>Riesgo por unidad</dt><dd>{formatMoney(riskPlan.riskPerUnit)}</dd></div><div><dt>Tamaño máximo</dt><dd>{riskPlan.quantity} acciones</dd></div><div><dt>Riesgo total</dt><dd>{formatMoney(riskPlan.riskBudget)}</dd></div><div><dt>Risk / Reward</dt><dd>1 : {riskPlan.riskReward.toFixed(1)}</dd></div></dl> : <p className="mutedText">Se calculará al disponer de entrada y stop.</p>}<h4>Estrategia de salida</h4><p>• 25% en TP1<br />• 25% en TP2<br />• 50% runner con trailing estructural</p></div>
+              <div className="managementCard"><h3>Gestión de posición</h3>{riskPlan ? <dl><div><dt>Riesgo por unidad</dt><dd>{formatMoney(riskPlan.riskPerUnit)}</dd></div><div><dt>Tamaño máximo</dt><dd>{riskPlan.quantity} acciones</dd></div><div><dt>Riesgo total</dt><dd>{formatMoney(riskPlan.riskBudget)}</dd></div><div><dt>Risk / Reward</dt><dd>{riskRewardText(riskPlan.riskReward)}</dd></div></dl> : <p className="mutedText">Se calculará al disponer de entrada y stop.</p>}<h4>Estrategia de salida</h4><p>• 25% en TP1<br />• 25% en TP2<br />• 50% runner con trailing estructural</p></div>
             </div>
           </section>
 

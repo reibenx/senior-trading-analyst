@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import type { CedearExecutionBatch } from '@/core/domain/cedear';
 import type { PortfolioOpportunitySummary } from '@/core/domain/opportunity';
 import type { Strategy } from '@/core/domain/trading';
 
@@ -22,12 +23,17 @@ export function PortfolioDashboard() {
   const [maxSymbols, setMaxSymbols] = useState(25);
   const [monthlyCapital, setMonthlyCapital] = useState('1000');
   const [data, setData] = useState<PortfolioOpportunitySummary | null>(null);
+  const [execution, setExecution] = useState<CedearExecutionBatch | null>(null);
   const [loading, setLoading] = useState(false);
+  const [executionLoading, setExecutionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionError, setExecutionError] = useState<string | null>(null);
 
   async function analyzePortfolio() {
     setLoading(true);
     setError(null);
+    setExecution(null);
+    setExecutionError(null);
     try {
       const parsedCapital = Number(monthlyCapital.replace(',', '.'));
       const response = await fetch('/api/portfolio/opportunities', {
@@ -47,6 +53,26 @@ export function PortfolioDashboard() {
       setError(requestError instanceof Error ? requestError.message : 'Error inesperado.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function previewExecution() {
+    if (!data?.allocationPlan) return;
+    setExecutionLoading(true);
+    setExecutionError(null);
+    try {
+      const response = await fetch('/api/portfolio/execution-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocation: data.allocationPlan, maxConversionAgeMinutes: 30 }),
+      });
+      const result = await response.json() as CedearExecutionBatch & ApiError;
+      if (!response.ok) throw new Error(result.error ?? 'No fue posible generar la previsualización de ejecución.');
+      setExecution(result);
+    } catch (requestError) {
+      setExecutionError(requestError instanceof Error ? requestError.message : 'Error inesperado.');
+    } finally {
+      setExecutionLoading(false);
     }
   }
 
@@ -98,7 +124,7 @@ export function PortfolioDashboard() {
               <section className="panel allocationPanel">
                 <div className="portfolioTitle">
                   <div><span className="eyebrow">ASIGNACIÓN MENSUAL</span><h1>Propuesta para USD {formatMoney(data.allocationPlan.capital)}</h1></div>
-                  <small>Planificación en USD. La conversión a CEDEAR/ARS queda pendiente de CCL y ratio vigente.</small>
+                  <small>La tesis se calcula en USD; la ejecución local sólo se habilita con CCL, ratio y precio CEDEAR vigentes.</small>
                 </div>
                 <div className="allocationSummary">
                   <div><span>Asignado</span><b>USD {formatMoney(data.allocationPlan.allocated)}</b></div>
@@ -115,6 +141,44 @@ export function PortfolioDashboard() {
                   ))}
                 </div>
                 {data.allocationPlan.notes.map((note) => <p className="allocationNote" key={note}>• {note}</p>)}
+                {data.allocationPlan.items.length ? (
+                  <button className="executionButton" onClick={previewExecution} disabled={executionLoading}>
+                    {executionLoading ? 'Validando ratios y CCL…' : 'Previsualizar ejecución CEDEAR'}
+                  </button>
+                ) : null}
+                {executionError ? <p className="executionError">{executionError}</p> : null}
+              </section>
+            ) : null}
+
+            {execution ? (
+              <section className="panel executionPanel">
+                <div className="portfolioTitle">
+                  <div><span className="eyebrow">EJECUCIÓN BYMA</span><h1>Previsualización CEDEAR</h1></div>
+                  <small>Conversión máxima admitida: {execution.maxConversionAgeMinutes} min. Esto no envía órdenes.</small>
+                </div>
+                <div className="executionSummary">
+                  <div><span>Listos</span><b>{execution.executableCount}</b></div>
+                  <div><span>Bloqueados</span><b>{execution.blockedCount}</b></div>
+                  <div><span>Costo estimado</span><b>ARS {formatMoney(execution.estimatedTotalCostArs)}</b></div>
+                </div>
+                <div className="executionGrid">
+                  {execution.items.map((item) => (
+                    <article className={`executionCard ${item.executable ? 'executionReady' : 'executionBlocked'}`} key={item.symbol}>
+                      <div><b>{item.symbol}</b><span>{item.status}</span></div>
+                      {item.plan ? (
+                        <>
+                          <h2>{item.plan.quantity} CEDEARs</h2>
+                          <p>Precio local <b>ARS {formatMoney(item.plan.localPriceArs)}</b></p>
+                          <p>Costo <b>ARS {formatMoney(item.plan.estimatedCostArs)}</b></p>
+                          <p>Remanente <b>ARS {formatMoney(item.plan.residualArs)}</b></p>
+                          <p>CCL <b>{formatMoney(item.plan.cclArsPerUsd)}</b></p>
+                          <p>Ratio <b>{item.plan.cedearsPerUnderlyingShare}:1</b></p>
+                        </>
+                      ) : <p>{item.reason}</p>}
+                      {item.reason && item.plan ? <small>{item.reason}</small> : null}
+                    </article>
+                  ))}
+                </div>
               </section>
             ) : null}
 

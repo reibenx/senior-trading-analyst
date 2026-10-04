@@ -3,7 +3,7 @@ import { getExecutionPolicy } from '@/core/execution/execution-policy';
 
 describe('execution policy', () => {
   it('defaults to disabled', () => {
-    const policy = getExecutionPolicy({} as NodeJS.ProcessEnv);
+    const policy = getExecutionPolicy({});
     expect(policy.mode).toBe('disabled');
     expect(policy.validationEnabled).toBe(false);
     expect(policy.simulationEnabled).toBe(false);
@@ -14,7 +14,7 @@ describe('execution policy', () => {
     const policy = getExecutionPolicy({
       IOL_EXECUTION_MODE: 'sandbox',
       IOL_ORDER_BRIDGE_URL: 'https://sandbox.example.test',
-    } as NodeJS.ProcessEnv);
+    });
     expect(policy.mode).toBe('sandbox');
     expect(policy.validationEnabled).toBe(true);
     expect(policy.simulationEnabled).toBe(true);
@@ -25,7 +25,7 @@ describe('execution policy', () => {
     const policy = getExecutionPolicy({
       IOL_EXECUTION_MODE: 'production',
       IOL_ORDER_BRIDGE_URL: 'https://orders.example.test',
-    } as NodeJS.ProcessEnv);
+    });
     expect(policy.mode).toBe('production');
     expect(policy.validationEnabled).toBe(true);
     expect(policy.simulationEnabled).toBe(false);
@@ -37,7 +37,7 @@ describe('execution policy', () => {
       IOL_EXECUTION_MODE: 'production',
       IOL_ORDER_BRIDGE_URL: 'https://orders.example.test',
       IOL_PRODUCTION_TRADING_ENABLED: 'true',
-    } as NodeJS.ProcessEnv);
+    });
     expect(policy.validationEnabled).toBe(true);
     expect(policy.simulationEnabled).toBe(false);
     expect(policy.placementEnabled).toBe(false);

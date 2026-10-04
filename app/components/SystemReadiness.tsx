@@ -36,6 +36,7 @@ function moduleLabel(key: string) {
     cedearRatios: 'Ratios CEDEAR',
     iolOrders: 'IOL · Órdenes',
     orderAudit: 'Auditoría de órdenes',
+    activityHistory: 'Historial persistente',
     cedearConversion: 'Conversión CEDEAR / CCL',
     alertState: 'Estado de alertas / Redis',
     telegram: 'Telegram',
@@ -65,9 +66,7 @@ export function SystemReadiness() {
     }
   }
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  useEffect(() => { void refresh(); }, []);
 
   return (
     <main>

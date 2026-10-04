@@ -3,8 +3,8 @@ import { buildPortfolioFingerprint, portfolioOpportunityTtlSeconds } from '@/cor
 import type { Position } from '@/core/domain/trading';
 
 const basePositions: Position[] = [
-  { symbol: 'NVDA', quantity: 10, marketValue: 1000 },
-  { symbol: 'GOOGL', quantity: 5, marketValue: 500 },
+  { symbol: 'NVDA', quantity: 10, marketValue: 1000, currency: 'ARS' },
+  { symbol: 'GOOGL', quantity: 5, marketValue: 500, currency: 'ARS' },
 ];
 
 describe('portfolio opportunity cache', () => {

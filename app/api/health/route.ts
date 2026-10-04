@@ -22,6 +22,8 @@ export async function GET() {
     : true;
   const compositeCedear = ratioReady && quoteAvailable;
   const executionPolicy = getExecutionPolicy();
+  const orderBridgeReady = Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
+  const confirmationSecretReady = (process.env.ORDER_CONFIRMATION_SECRET?.trim().length ?? 0) >= 24;
 
   const modules = {
     appAuth: configured('APP_ACCESS_USER', 'APP_ACCESS_PASSWORD'),
@@ -48,12 +50,17 @@ export async function GET() {
       officialSource: ratioMode !== 'bridge',
     },
     iolOrders: {
-      ready: executionPolicy.validationEnabled
-        && Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()),
+      ready: executionPolicy.validationEnabled && orderBridgeReady,
       mode: executionPolicy.mode,
       validationEnabled: executionPolicy.validationEnabled,
+      simulationEnabled: executionPolicy.simulationEnabled && confirmationSecretReady,
       placementEnabled: executionPolicy.placementEnabled,
+      confirmationSecretReady,
       reason: executionPolicy.reason,
+    },
+    orderAudit: {
+      ready: true,
+      mode: configured('ORDER_AUDIT_BRIDGE_URL') ? 'bridge' : 'server-log',
     },
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,

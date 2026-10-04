@@ -7,6 +7,11 @@ import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildMonthlyAllocationPlan } from '@/core/engines/monthly-allocation';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
 import { getMarketDataProvider } from '@/core/providers/market-provider';
+import {
+  buildPortfolioFingerprint,
+  getPortfolioOpportunityStore,
+  portfolioOpportunityTtlSeconds,
+} from '@/core/persistence/portfolio-opportunity-store';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
 
@@ -66,18 +71,30 @@ export async function POST(request: Request) {
       .slice(0, payload.maxSymbols);
 
     const marketProvider = getMarketDataProvider();
+    const store = getPortfolioOpportunityStore();
+    const portfolioFingerprint = buildPortfolioFingerprint(positions);
+    const cached = store
+      ? await store.getMany(payload.strategy, portfolioFingerprint, allSymbols).catch(() => new Map())
+      : new Map();
+
+    const missingSymbols = allSymbols.filter((symbol) => !cached.has(symbol));
     const batchLimit = marketProvider.id === 'twelve-data'
-      ? Math.min(allSymbols.length, twelveDataPortfolioBatchLimit())
-      : allSymbols.length;
-    const symbols = allSymbols.slice(0, batchLimit);
-    const deferred = allSymbols.slice(batchLimit);
+      ? Math.min(missingSymbols.length, twelveDataPortfolioBatchLimit())
+      : missingSymbols.length;
+    const symbolsToAnalyze = missingSymbols.slice(0, batchLimit);
+    const deferred = missingSymbols.slice(batchLimit);
 
-    const opportunities = [];
+    const opportunities = [...cached.values()];
     const errors: Array<{ symbol: string; error: string }> = [];
+    const ttlSeconds = portfolioOpportunityTtlSeconds(payload.strategy);
 
-    for (const symbol of symbols) {
+    for (const symbol of symbolsToAnalyze) {
       try {
-        opportunities.push(await analyzeOne(symbol, payload.strategy, positions));
+        const opportunity = await analyzeOne(symbol, payload.strategy, positions);
+        opportunities.push(opportunity);
+        if (store) {
+          await store.set(payload.strategy, portfolioFingerprint, opportunity, ttlSeconds).catch(() => undefined);
+        }
       } catch (error) {
         errors.push({
           symbol,
@@ -105,7 +122,16 @@ export async function POST(request: Request) {
       errors,
     };
 
-    return NextResponse.json(summary);
+    return NextResponse.json({
+      ...summary,
+      cache: {
+        enabled: Boolean(store),
+        hits: cached.size,
+        refreshed: symbolsToAnalyze.length - errors.length,
+        ttlSeconds,
+        portfolioFingerprint,
+      },
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid portfolio request', details: error.issues }, { status: 400 });

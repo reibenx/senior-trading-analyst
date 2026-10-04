@@ -22,6 +22,7 @@ export interface LocalQuoteRecord {
   localPriceArs: number;
   localBidArs?: number;
   localAskArs?: number;
+  impliedCclArsPerUsd?: number;
   marketStatus: MarketStatus;
   quoteTimestamp: string;
   source: string;
@@ -106,6 +107,7 @@ class QuoteBridgeProvider implements LocalQuoteProvider {
     const url = new URL('/quotes', this.baseUrl);
     url.searchParams.set('market', 'BCBA');
     url.searchParams.set('term', 't1');
+    url.searchParams.set('includeCable', 'true');
     url.searchParams.set('symbols', [...new Set(symbols.map((s) => s.toUpperCase()))].join(','));
     const response = await fetch(url, { headers: authHeaders(this.token), cache: 'no-store' });
     if (!response.ok) throw new Error(`IOL quote bridge error: HTTP ${response.status}`);
@@ -134,15 +136,15 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
   constructor(
     private readonly ratios: CedearRatioProvider,
     private readonly quotes: LocalQuoteProvider,
-    private readonly ccl: CclProvider,
+    private readonly ccl?: CclProvider,
   ) {}
 
   async getConversions(symbols: string[]): Promise<CedearConversion[]> {
     const normalized = [...new Set(symbols.map((symbol) => symbol.toUpperCase()))];
-    const [ratios, quotes, ccl] = await Promise.all([
+    const [ratios, quotes, globalCcl] = await Promise.all([
       this.ratios.getRatios(normalized),
       this.quotes.getQuotes(normalized),
-      this.ccl.getCcl(),
+      this.ccl ? this.ccl.getCcl() : Promise.resolve(undefined),
     ]);
 
     const ratioMap = new Map(ratios.map((item) => [item.symbol.toUpperCase(), item]));
@@ -151,20 +153,28 @@ export class CompositeCedearConversionProvider implements CedearConversionProvid
     return normalized.flatMap((symbol) => {
       const ratio = ratioMap.get(symbol);
       const quote = quoteMap.get(symbol);
-      if (!ratio || !quote) return [];
+      const cclValue = quote?.impliedCclArsPerUsd && quote.impliedCclArsPerUsd > 0
+        ? quote.impliedCclArsPerUsd
+        : globalCcl?.cclArsPerUsd;
+      if (!ratio || !quote || !cclValue) return [];
+
+      const timestamps = [ratio.updatedAt, quote.quoteTimestamp];
+      if (globalCcl?.updatedAt && !quote.impliedCclArsPerUsd) timestamps.push(globalCcl.updatedAt);
+      const oldestTimestamp = [...timestamps].sort()[0] ?? quote.quoteTimestamp;
+      const cclSource = quote.impliedCclArsPerUsd ? `${quote.source}:implied-cable` : globalCcl?.source ?? 'unknown-ccl';
 
       return [{
         symbol,
         underlyingSymbol: ratio.underlyingSymbol,
         cedearsPerUnderlyingShare: ratio.cedearsPerUnderlyingShare,
-        cclArsPerUsd: ccl.cclArsPerUsd,
+        cclArsPerUsd: cclValue,
         localPriceArs: quote.localPriceArs,
         localBidArs: quote.localBidArs,
         localAskArs: quote.localAskArs,
         marketStatus: quote.marketStatus,
         quoteTimestamp: quote.quoteTimestamp,
-        updatedAt: [ratio.updatedAt, quote.quoteTimestamp, ccl.updatedAt].sort().at(0) ?? quote.quoteTimestamp,
-        source: `${ratio.source}+${quote.source}+${ccl.source}`,
+        updatedAt: oldestTimestamp,
+        source: `${ratio.source}+${quote.source}+${cclSource}`,
       } satisfies CedearConversion];
     });
   }
@@ -182,11 +192,11 @@ export function getCedearConversionProvider(): CedearConversionProvider | null {
   const ratioUrl = process.env.CEDEAR_RATIO_BRIDGE_URL?.trim();
   const quoteUrl = process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim();
   const cclUrl = process.env.CCL_BRIDGE_URL?.trim();
-  if (!ratioUrl || !quoteUrl || !cclUrl) return null;
+  if (!ratioUrl || !quoteUrl) return null;
 
   return new CompositeCedearConversionProvider(
     new RatioBridgeProvider(ratioUrl, process.env.CEDEAR_RATIO_BRIDGE_TOKEN?.trim()),
     new QuoteBridgeProvider(quoteUrl, process.env.IOL_BRIDGE_TOKEN?.trim()),
-    new CclBridgeProvider(cclUrl, process.env.CCL_BRIDGE_TOKEN?.trim()),
+    cclUrl ? new CclBridgeProvider(cclUrl, process.env.CCL_BRIDGE_TOKEN?.trim()) : undefined,
   );
 }

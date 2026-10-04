@@ -1,5 +1,6 @@
 import type { ExecutionMode } from '@/core/execution/execution-policy';
 import type { OrderDraft } from '@/core/domain/orders';
+import { appendActivity } from '@/core/persistence/activity-store';
 
 export type OrderAuditStage =
   | 'VALIDATION_REQUESTED'
@@ -66,10 +67,32 @@ export async function recordOrderAudit(event: Omit<OrderAuditEvent, 'id' | 'time
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
   };
-  try {
-    await getOrderAuditSink().write(payload);
-  } catch (error) {
-    console.error('[ORDER_AUDIT_ERROR]', error);
-  }
+
+  const tasks: Promise<unknown>[] = [getOrderAuditSink().write(payload)];
+  tasks.push(appendActivity({
+    id: payload.id,
+    createdAt: payload.timestamp,
+    kind: 'ORDER_AUDIT',
+    symbol: payload.order.asset,
+    title: `${payload.stage} · ${payload.order.asset}`,
+    detail: payload.message,
+    severity: payload.accepted === false ? 'WARNING' : 'INFO',
+    metadata: {
+      mode: payload.mode,
+      side: payload.order.side,
+      type: payload.order.type,
+      quantity: payload.order.quantity,
+      amount: payload.order.amount,
+      limitPrice: payload.order.limitPrice,
+      validationIdPresent: payload.validationIdPresent,
+      brokerAdapterId: payload.brokerAdapterId,
+    },
+  }));
+
+  await Promise.allSettled(tasks).then((results) => {
+    for (const result of results) {
+      if (result.status === 'rejected') console.error('[ORDER_AUDIT_ERROR]', result.reason);
+    }
+  });
   return payload;
 }

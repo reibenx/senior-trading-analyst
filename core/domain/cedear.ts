@@ -5,6 +5,10 @@ export interface CedearConversion {
   underlyingSymbol: string;
   cedearsPerUnderlyingShare: number;
   cclArsPerUsd: number;
+  benchmarkCclArsPerUsd?: number;
+  cclBenchmarkDeviationPercent?: number;
+  cclSource?: 'IMPLIED_CABLE' | 'GLOBAL_BENCHMARK';
+  cableSymbol?: string;
   localPriceArs?: number;
   localBidArs?: number;
   localAskArs?: number;
@@ -65,6 +69,7 @@ export type CedearRevalidationStatus =
   | 'PRICE_MOVED'
   | 'RATIO_CHANGED'
   | 'CCL_MOVED'
+  | 'CCL_BENCHMARK_DIVERGED'
   | 'INSUFFICIENT_BUDGET'
   | 'MISSING_CONVERSION';
 
@@ -77,4 +82,5 @@ export interface CedearRevalidationResult {
   refreshedPlan?: CedearExecutionPlan;
   priceDriftPercent?: number;
   cclDriftPercent?: number;
+  cclBenchmarkDeviationPercent?: number;
 }

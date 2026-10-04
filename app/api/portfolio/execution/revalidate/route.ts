@@ -21,17 +21,7 @@ const requestSchema = z.object({
   maxCclDriftPercent: z.number().positive().max(10).optional(),
 });
 
-function authorized(request: Request): boolean {
-  const expected = process.env.EXECUTION_REVALIDATION_TOKEN?.trim();
-  if (!expected) return true;
-  return request.headers.get('authorization') === `Bearer ${expected}`;
-}
-
 export async function POST(request: Request) {
-  if (!authorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const payload = requestSchema.parse(await request.json());
     const provider = getCedearConversionProvider();

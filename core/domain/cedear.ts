@@ -20,3 +20,23 @@ export interface CedearExecutionPlan {
   cedearsPerUnderlyingShare: number;
   cclArsPerUsd: number;
 }
+
+export interface CedearExecutionItem {
+  symbol: string;
+  allocationUsd: number;
+  executable: boolean;
+  status: 'READY' | 'MISSING_CONVERSION' | 'STALE_CONVERSION' | 'INSUFFICIENT_BUDGET' | 'ERROR';
+  conversion?: CedearConversion;
+  plan?: CedearExecutionPlan;
+  reason?: string;
+}
+
+export interface CedearExecutionBatch {
+  generatedAt: string;
+  maxConversionAgeMinutes: number;
+  items: CedearExecutionItem[];
+  executableCount: number;
+  blockedCount: number;
+  totalAllocationUsd: number;
+  estimatedTotalCostArs: number;
+}

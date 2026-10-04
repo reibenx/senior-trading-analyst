@@ -2,12 +2,23 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { CedearExecutionBatch } from '@/core/domain/cedear';
+import type {
+  CedearExecutionBatch,
+  CedearExecutionIntent,
+  CedearRevalidationResult,
+} from '@/core/domain/cedear';
 import type { PortfolioOpportunitySummary } from '@/core/domain/opportunity';
 import type { Strategy } from '@/core/domain/trading';
 
 interface ApiError {
   error?: string;
+}
+
+interface RevalidationResponse extends ApiError {
+  generatedAt?: string;
+  readyCount?: number;
+  blockedCount?: number;
+  results?: CedearRevalidationResult[];
 }
 
 function actionLabel(action: string) {
@@ -24,8 +35,10 @@ export function PortfolioDashboard() {
   const [monthlyCapital, setMonthlyCapital] = useState('1000');
   const [data, setData] = useState<PortfolioOpportunitySummary | null>(null);
   const [execution, setExecution] = useState<CedearExecutionBatch | null>(null);
+  const [revalidation, setRevalidation] = useState<RevalidationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [executionLoading, setExecutionLoading] = useState(false);
+  const [revalidationLoading, setRevalidationLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
@@ -33,6 +46,7 @@ export function PortfolioDashboard() {
     setLoading(true);
     setError(null);
     setExecution(null);
+    setRevalidation(null);
     setExecutionError(null);
     try {
       const parsedCapital = Number(monthlyCapital.replace(',', '.'));
@@ -60,6 +74,7 @@ export function PortfolioDashboard() {
     if (!data?.allocationPlan) return;
     setExecutionLoading(true);
     setExecutionError(null);
+    setRevalidation(null);
     try {
       const response = await fetch('/api/portfolio/execution-preview', {
         method: 'POST',
@@ -73,6 +88,48 @@ export function PortfolioDashboard() {
       setExecutionError(requestError instanceof Error ? requestError.message : 'Error inesperado.');
     } finally {
       setExecutionLoading(false);
+    }
+  }
+
+  async function revalidateExecution() {
+    if (!execution) return;
+    const intents: CedearExecutionIntent[] = execution.items
+      .filter((item) => item.executable && item.plan && item.conversion)
+      .map((item) => ({
+        symbol: item.symbol,
+        allocationUsd: item.allocationUsd,
+        previewLocalPriceArs: item.plan!.localPriceArs,
+        previewQuantity: item.plan!.quantity,
+        previewCclArsPerUsd: item.plan!.cclArsPerUsd,
+        previewRatio: item.plan!.cedearsPerUnderlyingShare,
+        previewedAt: execution.generatedAt,
+      }));
+
+    if (!intents.length) {
+      setExecutionError('No hay ideas ejecutables para revalidar.');
+      return;
+    }
+
+    setRevalidationLoading(true);
+    setExecutionError(null);
+    try {
+      const response = await fetch('/api/portfolio/execution/revalidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intents,
+          maxQuoteAgeSeconds: 120,
+          maxPriceDriftPercent: 1,
+          maxCclDriftPercent: 1.5,
+        }),
+      });
+      const result = await response.json() as RevalidationResponse;
+      if (!response.ok) throw new Error(result.error ?? 'No fue posible revalidar la ejecución.');
+      setRevalidation(result);
+    } catch (requestError) {
+      setExecutionError(requestError instanceof Error ? requestError.message : 'Error inesperado.');
+    } finally {
+      setRevalidationLoading(false);
     }
   }
 
@@ -176,6 +233,41 @@ export function PortfolioDashboard() {
                         </>
                       ) : <p>{item.reason}</p>}
                       {item.reason && item.plan ? <small>{item.reason}</small> : null}
+                    </article>
+                  ))}
+                </div>
+                {execution.executableCount > 0 ? (
+                  <button className="executionButton" onClick={revalidateExecution} disabled={revalidationLoading}>
+                    {revalidationLoading ? 'Revalidando mercado y precio…' : 'Revalidar antes de confirmar'}
+                  </button>
+                ) : null}
+              </section>
+            ) : null}
+
+            {revalidation?.results ? (
+              <section className="panel executionPanel">
+                <div className="portfolioTitle">
+                  <div><span className="eyebrow">CONTROL FINAL</span><h1>Revalidación de ejecución</h1></div>
+                  <small>READY_TO_CONFIRM no envía una orden; sólo certifica que el plan sigue dentro de tolerancias.</small>
+                </div>
+                <div className="executionSummary">
+                  <div><span>Listos para confirmar</span><b>{revalidation.readyCount ?? 0}</b></div>
+                  <div><span>Bloqueados</span><b>{revalidation.blockedCount ?? 0}</b></div>
+                </div>
+                <div className="executionGrid">
+                  {revalidation.results.map((item) => (
+                    <article className={`executionCard ${item.readyToConfirm ? 'executionReady' : 'executionBlocked'}`} key={item.symbol}>
+                      <div><b>{item.symbol}</b><span>{item.status}</span></div>
+                      {item.refreshedPlan ? (
+                        <>
+                          <h2>{item.refreshedPlan.quantity} CEDEARs</h2>
+                          <p>Precio revalidado <b>ARS {formatMoney(item.refreshedPlan.localPriceArs)}</b></p>
+                          <p>Costo revalidado <b>ARS {formatMoney(item.refreshedPlan.estimatedCostArs)}</b></p>
+                          <p>Drift precio <b>{item.priceDriftPercent?.toFixed(2) ?? '—'}%</b></p>
+                          <p>Drift CCL <b>{item.cclDriftPercent?.toFixed(2) ?? '—'}%</b></p>
+                        </>
+                      ) : null}
+                      {item.reason ? <small>{item.reason}</small> : null}
                     </article>
                   ))}
                 </div>

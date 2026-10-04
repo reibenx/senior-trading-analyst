@@ -121,7 +121,9 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
 
   const closes = bars.map((bar) => bar.close);
   const currentPrice = closes[closes.length - 1];
+  const ema9 = ema(closes, 9);
   const ema20 = ema(closes, 20);
+  const ema21 = ema(closes, 21);
   const ema50 = ema(closes, 50);
   const ema200 = ema(closes, 200);
   const atr14 = atr(bars, 14);
@@ -145,7 +147,8 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   const volatility = atr14 ?? currentPrice * 0.025;
 
   const overlays: Array<LineOverlay | ZoneOverlay> = [];
-  if (ema20 !== undefined) overlays.push({ id: 'ema20', kind: 'ema', label: 'EMA 20', value: round(ema20) });
+  if (ema9 !== undefined) overlays.push({ id: 'ema9', kind: 'ema', label: 'EMA 9', value: round(ema9) });
+  if (ema21 !== undefined) overlays.push({ id: 'ema21', kind: 'ema', label: 'EMA 21', value: round(ema21) });
   if (ema50 !== undefined) overlays.push({ id: 'ema50', kind: 'ema', label: 'EMA 50', value: round(ema50) });
   if (ema200 !== undefined) overlays.push({ id: 'ema200', kind: 'ema', label: 'EMA 200', value: round(ema200) });
   if (rollingVwap !== undefined) overlays.push({ id: 'vwap20', kind: 'vwap', label: 'VWAP 20', value: round(rollingVwap) });
@@ -159,7 +162,7 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
   if (resistanceTrendline) overlays.push(resistanceTrendline);
   overlays.push(...fibonacciOverlays(bars, lowPivots, highPivots, volatility));
 
-  const referenceSupport = supportLevels[0] ?? ema50 ?? ema20 ?? currentPrice * 0.96;
+  const referenceSupport = supportLevels[0] ?? ema21 ?? ema20 ?? ema50 ?? currentPrice * 0.96;
   const entryAHigh = Math.min(currentPrice, referenceSupport + volatility * 0.45);
   const entryALow = Math.max(0, referenceSupport - volatility * 0.35);
   const entryBReference = supportLevels[1] ?? ema200 ?? referenceSupport - volatility * 1.25;
@@ -179,7 +182,9 @@ export function buildTechnicalSnapshot(input: TechnicalAnalysisInput): Technical
     symbol,
     timeframe,
     currentPrice: round(currentPrice),
+    ema9: ema9 !== undefined ? round(ema9) : undefined,
     ema20: ema20 !== undefined ? round(ema20) : undefined,
+    ema21: ema21 !== undefined ? round(ema21) : undefined,
     ema50: ema50 !== undefined ? round(ema50) : undefined,
     ema200: ema200 !== undefined ? round(ema200) : undefined,
     atr14: atr14 !== undefined ? round(atr14) : undefined,

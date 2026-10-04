@@ -8,6 +8,7 @@ import type {
   LocalQuoteProvider,
   LocalQuoteRecord,
 } from '@/core/providers/cedear-provider-contracts';
+import { CajaDeValoresRatioProvider } from '@/core/providers/caja-de-valores-ratios';
 import { getIolDirectQuoteProvider } from '@/core/providers/iol-direct-quotes';
 
 interface BridgeConversionResponse {
@@ -68,6 +69,32 @@ class RatioBridgeProvider implements CedearRatioProvider {
   }
 }
 
+class FallbackRatioProvider implements CedearRatioProvider {
+  readonly id = 'cedear-ratio-fallback';
+
+  constructor(
+    private readonly primary: CedearRatioProvider,
+    private readonly fallback?: CedearRatioProvider,
+  ) {}
+
+  async getRatios(symbols: string[]): Promise<CedearRatioRecord[]> {
+    try {
+      const primary = await this.primary.getRatios(symbols);
+      const bySymbol = new Map(primary.map((item) => [item.symbol.toUpperCase(), item]));
+      const missing = symbols.filter((symbol) => !bySymbol.has(symbol.toUpperCase()));
+      if (missing.length && this.fallback) {
+        for (const item of await this.fallback.getRatios(missing)) {
+          bySymbol.set(item.symbol.toUpperCase(), item);
+        }
+      }
+      return [...bySymbol.values()];
+    } catch (error) {
+      if (!this.fallback) throw error;
+      return this.fallback.getRatios(symbols);
+    }
+  }
+}
+
 class QuoteBridgeProvider implements LocalQuoteProvider {
   readonly id = 'iol-quote-bridge';
   constructor(private readonly baseUrl: string, private readonly token?: string) {}
@@ -97,6 +124,22 @@ class CclBridgeProvider implements CclProvider {
     if (!(payload.cclArsPerUsd > 0) || !payload.updatedAt) throw new Error('CCL bridge returned an invalid snapshot');
     return payload;
   }
+}
+
+function getRatioProvider(): CedearRatioProvider {
+  const mode = process.env.CEDEAR_RATIO_PROVIDER?.trim().toLowerCase() || 'auto';
+  const bridgeUrl = process.env.CEDEAR_RATIO_BRIDGE_URL?.trim();
+  const bridge = bridgeUrl
+    ? new RatioBridgeProvider(bridgeUrl, process.env.CEDEAR_RATIO_BRIDGE_TOKEN?.trim())
+    : undefined;
+
+  if (mode === 'bridge' && bridge) return bridge;
+  if (mode === 'bridge' && !bridge) throw new Error('CEDEAR_RATIO_PROVIDER=bridge but CEDEAR_RATIO_BRIDGE_URL is missing');
+
+  const caja = new CajaDeValoresRatioProvider(
+    process.env.CEDEAR_CAJA_URL?.trim() || 'https://cajadevalores.com.ar/Servicios/Cedears',
+  );
+  return mode === 'caja' ? caja : new FallbackRatioProvider(caja, bridge);
 }
 
 export class CompositeCedearConversionProvider implements CedearConversionProvider {
@@ -170,9 +213,6 @@ export function getCedearConversionProvider(): CedearConversionProvider | null {
     );
   }
 
-  const ratioUrl = process.env.CEDEAR_RATIO_BRIDGE_URL?.trim();
-  if (!ratioUrl) return null;
-
   const directQuotes = getIolDirectQuoteProvider();
   const quoteUrl = process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim();
   const quoteProvider: LocalQuoteProvider | null = directQuotes
@@ -181,7 +221,7 @@ export function getCedearConversionProvider(): CedearConversionProvider | null {
 
   const cclUrl = process.env.CCL_BRIDGE_URL?.trim();
   return new CompositeCedearConversionProvider(
-    new RatioBridgeProvider(ratioUrl, process.env.CEDEAR_RATIO_BRIDGE_TOKEN?.trim()),
+    getRatioProvider(),
     quoteProvider,
     cclUrl ? new CclBridgeProvider(cclUrl, process.env.CCL_BRIDGE_TOKEN?.trim()) : undefined,
   );

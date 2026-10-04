@@ -5,8 +5,9 @@ import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { FundamentalScore, FundamentalSnapshot } from '@/core/domain/fundamentals';
 import type { MarketContextSnapshot } from '@/core/domain/market-context';
 import type { LineOverlay, OHLCVBar, TechnicalSnapshot, Timeframe, ZoneOverlay } from '@/core/domain/market';
-import type { Strategy } from '@/core/domain/trading';
+import type { Position, Strategy } from '@/core/domain/trading';
 import { decide } from '@/core/engines/decision';
+import { calculatePortfolioFit } from '@/core/engines/portfolio-fit';
 import { calculatePositionSizing } from '@/core/engines/risk';
 import { calculateScores } from '@/core/engines/scoring';
 import { calculateTechnicalScore } from '@/core/engines/technical-score';
@@ -24,6 +25,14 @@ interface AnalyzeResponse {
   fundamentalScore?: FundamentalScore | null;
   fundamentalSource?: string | null;
   marketContext?: MarketContextSnapshot | null;
+  error?: string;
+}
+
+interface PortfolioResponse {
+  connected: boolean;
+  broker: string | null;
+  positions: Position[];
+  message?: string;
   error?: string;
 }
 
@@ -65,6 +74,9 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const [fundamentalScore, setFundamentalScore] = useState<FundamentalScore | null>(null);
   const [fundamentalSource, setFundamentalSource] = useState<string | null>(null);
   const [marketContext, setMarketContext] = useState<MarketContextSnapshot | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [portfolioConnected, setPortfolioConnected] = useState(false);
+  const [portfolioBroker, setPortfolioBroker] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,21 +105,31 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     ? 0
     : Math.round(Math.max(0, Math.min(100, riskPlan.riskReward * 25)));
 
+  const portfolioFit = useMemo(() => (
+    portfolioConnected && positions.length
+      ? calculatePortfolioFit(positions, snapshot.symbol, 0)
+      : null
+  ), [portfolioConnected, positions, snapshot.symbol]);
+
+  const alreadyOwned = useMemo(() => positions.some(
+    (position) => position.symbol.toUpperCase() === snapshot.symbol.toUpperCase() && position.quantity > 0,
+  ), [positions, snapshot.symbol]);
+
   const scoreCard = useMemo(() => calculateScores(strategy, {
     technical: technicalScore,
     fundamental: fundamentalScore?.total ?? 50,
     valuation: fundamentalScore?.valuation ?? 50,
     market: marketContext?.score ?? 50,
     riskReward: riskRewardScore,
-    portfolioFit: 50,
-  }), [strategy, technicalScore, fundamentalScore, marketContext, riskRewardScore]);
+    portfolioFit: portfolioFit?.portfolioFitScore ?? 50,
+  }), [strategy, technicalScore, fundamentalScore, marketContext, riskRewardScore, portfolioFit]);
 
   const decisionResult = useMemo(() => decide({
     strategy,
     scores: scoreCard,
     technical: snapshot,
-    alreadyOwned: false,
-  }), [strategy, scoreCard, snapshot]);
+    alreadyOwned,
+  }), [strategy, scoreCard, snapshot, alreadyOwned]);
 
   const scores: Array<[string, number | null]> = [
     ['Técnico', technicalScore],
@@ -115,7 +137,8 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     ['Valuación', fundamentalScore?.valuation ?? null],
     ['Mercado', marketContext?.score ?? null],
     ['Riesgo / Retorno', riskRewardScore],
-    ['Convicción*', scoreCard.conviction],
+    ['Portfolio Fit', portfolioFit?.portfolioFitScore ?? null],
+    ['Convicción', scoreCard.conviction],
   ];
 
   function onStrategyChange(nextStrategy: Strategy) {
@@ -136,16 +159,21 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     setError(null);
 
     try {
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: cleanSymbol, strategy, timeframe }),
-      });
+      const [analysisResponse, portfolioResponse] = await Promise.all([
+        fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbol: cleanSymbol, strategy, timeframe }),
+        }),
+        fetch('/api/portfolio', { cache: 'no-store' }),
+      ]);
 
-      const result = (await response.json()) as AnalyzeResponse;
-      if (!response.ok || !result.snapshot || !result.bars) {
+      const result = (await analysisResponse.json()) as AnalyzeResponse;
+      if (!analysisResponse.ok || !result.snapshot || !result.bars) {
         throw new Error(result.error ?? 'No fue posible analizar el ticker.');
       }
+
+      const portfolio = (await portfolioResponse.json()) as PortfolioResponse;
 
       setSymbol(cleanSymbol);
       setBars(result.bars);
@@ -155,6 +183,9 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
       setFundamentalScore(result.fundamentalScore ?? null);
       setFundamentalSource(result.fundamentalSource ?? null);
       setMarketContext(result.marketContext ?? null);
+      setPortfolioConnected(Boolean(portfolioResponse.ok && portfolio.connected));
+      setPortfolioBroker(portfolio.broker ?? null);
+      setPositions(portfolio.positions ?? []);
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : 'Error inesperado al analizar el ticker.');
     } finally {
@@ -186,8 +217,8 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
           <div className="status"><b>Market Data</b><span>{source === 'demo-fixture' ? 'DEMO OHLCV · configurar TWELVE_DATA_API_KEY' : source}</span></div>
           <div className="status"><b>Fundamentales</b><span>{fundamentalSource ?? 'Configurar ALPHA_VANTAGE_API_KEY'}</span></div>
           <div className="status"><b>Market Context</b><span>{marketContext ? `SPY + ${marketContext.sectorSymbol ?? 'sector neutral'}` : 'Requiere market data real'}</span></div>
-          <div className="status"><b>IOL Portfolio</b><span>Puente seguro pendiente</span></div>
-          <div className="status"><b>Monitoring Agent</b><span>Arquitectura 24/7 preparada</span></div>
+          <div className="status"><b>IOL Portfolio</b><span>{portfolioConnected ? `${portfolioBroker ?? 'broker'} · ${positions.length} posiciones` : 'Bridge seguro no conectado'}</span></div>
+          <div className="status"><b>Monitoring Agent</b><span>Reglas + Telegram preparadas</span></div>
         </aside>
 
         <section className="workspace">
@@ -204,13 +235,24 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
         <aside className="panel decision">
           <span className="eyebrow">DECISIÓN {source === 'demo-fixture' ? 'DEMO' : ''}</span>
           <h1>{decisionResult.headline}</h1>
-          <h3>{strategy.toUpperCase()} · convicción provisional {scoreCard.conviction}/100</h3>
+          <h3>{strategy.toUpperCase()} · convicción {scoreCard.conviction}/100</h3>
           <div className="conviction"><span>Modelo</span><b>{scoreCard.conviction}/100</b></div>
 
           <hr /><h3>Plan técnico automático</h3>
           <p>Entry A <b>{entryA ? `$${entryA.low.toFixed(2)}–$${entryA.high.toFixed(2)}` : '—'}</b></p>
           <p>Entry B <b>{entryB ? `$${entryB.low.toFixed(2)}–$${entryB.high.toFixed(2)}` : '—'}</b></p>
           <p>Stop <b>{stop !== undefined ? `$${stop.toFixed(2)}` : '—'}</b></p><p>TP1 <b>{tp1 !== undefined ? `$${tp1.toFixed(2)}` : '—'}</b></p><p>TP2 <b>{tp2 !== undefined ? `$${tp2.toFixed(2)}` : '—'}</b></p>
+
+          <hr /><h3>Cartera</h3>
+          {portfolioFit ? (
+            <>
+              <p>Estado <b>{alreadyOwned ? 'POSICIÓN EXISTENTE' : 'NO EN CARTERA'}</b></p>
+              <p>Peso actual <b>{portfolioFit.currentWeightPercent.toFixed(1)}%</b></p>
+              <p>Portfolio Fit <b>{portfolioFit.portfolioFitScore}/100</b></p>
+              {portfolioFit.reasons.map((reason) => <p key={reason}>• {reason}</p>)}
+              <p><small>El peso proyectado post-compra se habilitará al normalizar CEDEAR/CCL y moneda del plan.</small></p>
+            </>
+          ) : <p>Conectá el bridge IOL para incorporar concentración y posición real a la decisión.</p>}
 
           <hr /><h3>Razonamiento del modelo</h3>
           {decisionResult.reasons.length ? decisionResult.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin señales positivas suficientes.</p>}
@@ -233,13 +275,12 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
               <p>ROE <b>{formatPercent(fundamentals.returnOnEquity)}</b> · margen neto <b>{formatPercent(fundamentals.profitMargin)}</b></p>
               <p>Revenue YoY <b>{formatPercent(fundamentals.revenueGrowthYoY)}</b> · EPS YoY <b>{formatPercent(fundamentals.earningsGrowthYoY)}</b></p>
             </>
-          ) : <p>Sin proveedor fundamental configurado; se usa un valor neutral sólo para la convicción provisional.</p>}
+          ) : <p>Sin proveedor fundamental configurado; se usa un valor neutral en el score.</p>}
 
           <hr /><h3>Gestión de riesgo</h3>
           {riskPlan ? <><p>Presupuesto de riesgo <b>USD {riskPlan.riskBudget.toFixed(2)}</b></p><p>Riesgo por unidad <b>USD {riskPlan.riskPerUnit.toFixed(2)}</b></p><p>Tamaño máximo <b>{riskPlan.quantity} unidades</b></p><p>Capital utilizado <b>USD {riskPlan.positionValue.toFixed(2)} ({riskPlan.capitalUtilizationPercent}%)</b></p><p>R/R a TP1 <b>{riskPlan.riskReward !== undefined ? `1:${riskPlan.riskReward.toFixed(2)}` : '—'}</b></p></> : <p>Ingresá capital y riesgo válidos para calcular position sizing.</p>}
 
           <hr /><h3>Qué invalida la tesis</h3><p>Ruptura estructural, pérdida del stop técnico, deterioro fundamental o cambio relevante del régimen de mercado.</p>
-          <p><small>* Portfolio Fit permanece neutral hasta conectar la cartera IOL; por eso la convicción aún se muestra como provisional.</small></p>
         </aside>
       </section>
     </main>

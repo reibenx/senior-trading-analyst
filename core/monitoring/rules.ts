@@ -1,4 +1,4 @@
-import type { AlertEvent, TradePlan } from '@/core/domain/trading';
+import type { AlertEvent, Decision, TradePlan } from '@/core/domain/trading';
 import type { MonitorRule } from '@/core/monitoring/agent';
 
 function event(
@@ -20,6 +20,55 @@ function event(
     metadata: { dedupKey },
   };
 }
+
+const actionableDecision: Partial<Record<Decision, {
+  label: string;
+  severity: AlertEvent['severity'];
+  guidance: string;
+}>> = {
+  STRONG_ADD: {
+    label: 'AUMENTAR FUERTE',
+    severity: 'OPPORTUNITY',
+    guidance: 'La combinación de setup y score favorece sumar posición. Confirmar tamaño y zona de entrada antes de ejecutar.',
+  },
+  ADD: {
+    label: 'AUMENTAR',
+    severity: 'OPPORTUNITY',
+    guidance: 'El setup favorece una adición táctica. Priorizar Entry A/B y respetar invalidación.',
+  },
+  TAKE_PROFIT: {
+    label: 'TOMAR GANANCIAS',
+    severity: 'ACTION',
+    guidance: 'Evaluar toma parcial y mantener un remanente con trailing stop si la estructura sigue vigente.',
+  },
+  REDUCE: {
+    label: 'REDUCIR',
+    severity: 'ACTION',
+    guidance: 'La relación riesgo/convicción se deterioró. Revisar exposición y reducir si la tesis ya no compensa el riesgo.',
+  },
+  EXIT: {
+    label: 'SALIR / REVISAR TESIS',
+    severity: 'CRITICAL',
+    guidance: 'La señal requiere revisar la tesis de inmediato y considerar salida si la invalidación se confirma.',
+  },
+};
+
+export const decisionSignalRule: MonitorRule = {
+  id: 'decision-signal',
+  evaluate(plan) {
+    const signal = actionableDecision[plan.decision];
+    if (!signal) return null;
+    const convictionBucket = Math.floor(plan.scores.conviction / 5) * 5;
+    return event(
+      plan,
+      'DECISION_SIGNAL',
+      `${plan.symbol} · ${signal.label}`,
+      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}`,
+      signal.severity,
+      `${plan.symbol}:DECISION_SIGNAL:${plan.decision}:${convictionBucket}`,
+    );
+  },
+};
 
 export const entryZoneRule: MonitorRule = {
   id: 'entry-zone',
@@ -71,4 +120,9 @@ export const targetHitRule: MonitorRule = {
   },
 };
 
-export const defaultMonitorRules: MonitorRule[] = [stopBreachRule, targetHitRule, entryZoneRule];
+export const defaultMonitorRules: MonitorRule[] = [
+  stopBreachRule,
+  targetHitRule,
+  entryZoneRule,
+  decisionSignalRule,
+];

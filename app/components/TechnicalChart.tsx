@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type { LineOverlay, OHLCVBar, TechnicalSnapshot, ZoneOverlay } from '@/core/domain/market';
 
 interface Props {
@@ -7,14 +10,8 @@ interface Props {
 
 type PricedLineOverlay = LineOverlay & { value: number };
 type SegmentLineOverlay = LineOverlay & { from: { time: string; value: number }; to: { time: string; value: number } };
-
-type VolumeProfileBin = {
-  low: number;
-  high: number;
-  total: number;
-  up: number;
-  down: number;
-};
+type VolumeProfileBin = { low: number; high: number; total: number; up: number; down: number };
+type IndicatorKey = 'ema' | 'profile' | 'rsi' | 'macd' | 'volume';
 
 const W = 920;
 const PRICE_H = 390;
@@ -28,6 +25,14 @@ const PAD_Y = 22;
 const PROFILE_MAX_W = 118;
 const PROFILE_BINS = 18;
 
+const INDICATOR_LABELS: Record<IndicatorKey, string> = {
+  ema: 'EMA',
+  profile: 'Profile',
+  rsi: 'RSI',
+  macd: 'MACD',
+  volume: 'Volumen',
+};
+
 function isPricedLineOverlay(overlay: TechnicalSnapshot['overlays'][number]): overlay is PricedLineOverlay {
   return overlay.kind !== 'entry-zone' && typeof overlay.value === 'number';
 }
@@ -40,7 +45,7 @@ function emaSeries(values: number[], period: number) {
   if (!values.length) return [];
   const k = 2 / (period + 1);
   const out = [values[0]];
-  for (let i = 1; i < values.length; i += 1) out.push(values[i] * k + out[i - 1] * (1 - k));
+  for (let index = 1; index < values.length; index += 1) out.push(values[index] * k + out[index - 1] * (1 - k));
   return out;
 }
 
@@ -49,30 +54,30 @@ function rsiSeries(values: number[], period = 14) {
   if (values.length <= period) return out;
   let gains = 0;
   let losses = 0;
-  for (let i = 1; i <= period; i += 1) {
-    const delta = values[i] - values[i - 1];
+  for (let index = 1; index <= period; index += 1) {
+    const delta = values[index] - values[index - 1];
     gains += Math.max(delta, 0);
     losses += Math.max(-delta, 0);
   }
   let avgGain = gains / period;
   let avgLoss = losses / period;
   out[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
-  for (let i = period + 1; i < values.length; i += 1) {
-    const delta = values[i] - values[i - 1];
+  for (let index = period + 1; index < values.length; index += 1) {
+    const delta = values[index] - values[index - 1];
     avgGain = (avgGain * (period - 1) + Math.max(delta, 0)) / period;
     avgLoss = (avgLoss * (period - 1) + Math.max(-delta, 0)) / period;
-    out[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+    out[index] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
   }
   return out;
 }
 
-function pathFrom(values: Array<number | null>, x: (i: number) => number, y: (v: number) => number) {
-  let d = '';
+function pathFrom(values: Array<number | null>, x: (index: number) => number, y: (value: number) => number) {
+  let path = '';
   values.forEach((value, index) => {
     if (value === null || !Number.isFinite(value)) return;
-    d += `${d ? 'L' : 'M'} ${x(index).toFixed(2)} ${y(value).toFixed(2)} `;
+    path += `${path ? 'L' : 'M'} ${x(index).toFixed(2)} ${y(value).toFixed(2)} `;
   });
-  return d;
+  return path;
 }
 
 function buildVolumeProfile(bars: OHLCVBar[], min: number, max: number, binsCount = PROFILE_BINS): VolumeProfileBin[] {
@@ -103,6 +108,14 @@ function overlayClassName(line: PricedLineOverlay) {
 }
 
 export function TechnicalChart({ bars, snapshot }: Props) {
+  const [indicators, setIndicators] = useState<Record<IndicatorKey, boolean>>({
+    ema: true,
+    profile: true,
+    rsi: true,
+    macd: true,
+    volume: true,
+  });
+
   const visible = bars.slice(-80);
   const firstVisibleIndex = Math.max(0, bars.length - visible.length);
   const closes = visible.map((bar) => bar.close);
@@ -152,8 +165,17 @@ export function TechnicalChart({ bars, snapshot }: Props) {
   const pocIndex = volumeProfile.reduce((bestIndex, bin, index, bins) => bin.total > bins[bestIndex].total ? index : bestIndex, 0);
   const priceTicks = Array.from({ length: 6 }, (_, index) => max - (range * index) / 5);
 
+  const toggleIndicator = (key: IndicatorKey) => setIndicators((current) => ({ ...current, [key]: !current[key] }));
+
   return (
     <div className="technicalChartWrap">
+      <div className="chartIndicatorControls" aria-label="Indicadores visibles">
+        {(Object.keys(INDICATOR_LABELS) as IndicatorKey[]).map((key) => (
+          <button key={key} type="button" className={indicators[key] ? 'active' : ''} onClick={() => toggleIndicator(key)} aria-pressed={indicators[key]}>
+            {INDICATOR_LABELS[key]}
+          </button>
+        ))}
+      </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="technicalChart technicalChartExpanded" role="img" aria-label={`${snapshot.symbol} ${snapshot.timeframe} technical chart`}>
         <defs>
           <linearGradient id="chartBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0b1c2b"/><stop offset="100%" stopColor="#06111c"/></linearGradient>
@@ -166,23 +188,20 @@ export function TechnicalChart({ bars, snapshot }: Props) {
           return <g key={`tick-${tick}`}><line x1={PAD_X} x2={W - PAD_X} y1={py} y2={py} className="gridLine"/><text x={W - PAD_X + 5} y={py + 3} className="priceAxisLabel">{tick.toFixed(2)}</text></g>;
         })}
 
-        <g clipPath="url(#priceClip)" className="volumeProfile">
-          {volumeProfile.map((bin, index) => {
-            const center = (bin.low + bin.high) / 2;
-            const binHeight = Math.max(3, Math.abs(yPrice(bin.low) - yPrice(bin.high)) - 1);
-            const width = (bin.total / profileMaxVolume) * PROFILE_MAX_W;
-            const upWidth = bin.total > 0 ? width * (bin.up / bin.total) : 0;
-            const downWidth = Math.max(0, width - upWidth);
-            const top = yPrice(center) - binHeight / 2;
-            return (
-              <g key={`vp-${index}`} className={index === pocIndex ? 'profileBin poc' : 'profileBin'}>
-                <rect x={PAD_X} y={top} width={downWidth} height={binHeight} className="profileDown"/>
-                <rect x={PAD_X + downWidth} y={top} width={upWidth} height={binHeight} className="profileUp"/>
-              </g>
-            );
-          })}
-        </g>
-        <text x={PAD_X + 4} y={PAD_Y + 10} className="profileCaption">VOLUME PROFILE · POC</text>
+        {indicators.profile ? <>
+          <g clipPath="url(#priceClip)" className="volumeProfile">
+            {volumeProfile.map((bin, index) => {
+              const center = (bin.low + bin.high) / 2;
+              const binHeight = Math.max(3, Math.abs(yPrice(bin.low) - yPrice(bin.high)) - 1);
+              const width = (bin.total / profileMaxVolume) * PROFILE_MAX_W;
+              const upWidth = bin.total > 0 ? width * (bin.up / bin.total) : 0;
+              const downWidth = Math.max(0, width - upWidth);
+              const top = yPrice(center) - binHeight / 2;
+              return <g key={`vp-${index}`} className={index === pocIndex ? 'profileBin poc' : 'profileBin'}><rect x={PAD_X} y={top} width={downWidth} height={binHeight} className="profileDown"/><rect x={PAD_X + downWidth} y={top} width={upWidth} height={binHeight} className="profileUp"/></g>;
+            })}
+          </g>
+          <text x={PAD_X + 4} y={PAD_Y + 10} className="profileCaption">VOLUME PROFILE · POC</text>
+        </> : null}
 
         {zones.map((zone) => {
           const top = yPrice(zone.high);
@@ -193,6 +212,7 @@ export function TechnicalChart({ bars, snapshot }: Props) {
         {segments.map((line) => <g key={line.id}><line x1={xForTime(line.from.time)} y1={yPrice(line.from.value)} x2={xForTime(line.to.time)} y2={yPrice(line.to.value)} className={`overlayLine ${line.kind} segmentLine ${line.id}`}/><text x={xForTime(line.to.time)-4} y={yPrice(line.to.value)-6} textAnchor="end" className={`overlayLabel ${line.kind}`}>{line.label}</text></g>)}
 
         {lines.map((line) => {
+          if (line.kind === 'ema' && !indicators.ema) return null;
           const py = yPrice(line.value);
           const keyLevel = line.kind === 'stop' || line.kind === 'target' || line.kind === 'resistance';
           return <g key={line.id}><line x1={PAD_X} x2={W-PAD_X} y1={py} y2={py} className={overlayClassName(line)}/>{keyLevel ? <rect x={W-PAD_X-90} y={py-10} width={86} height={18} rx={3} className={`levelBadge ${line.kind}`}/> : null}<text x={W-PAD_X-6} y={py+3} textAnchor="end" className={`overlayLabel ${line.kind} ${line.id}`}>{line.label} {line.value.toFixed(2)}</text></g>;
@@ -208,33 +228,35 @@ export function TechnicalChart({ bars, snapshot }: Props) {
 
         {lastBar ? <g><line x1={PAD_X} x2={W-PAD_X} y1={yPrice(lastBar.close)} y2={yPrice(lastBar.close)} className="currentPriceLine"/><rect x={W-PAD_X-63} y={yPrice(lastBar.close)-10} width={59} height={19} rx={3} className="currentPriceBadge"/><text x={W-PAD_X-8} y={yPrice(lastBar.close)+3} textAnchor="end" className="currentPriceText">{lastBar.close.toFixed(2)}</text></g> : null}
 
-        <line x1={PAD_X} x2={W-PAD_X} y1={rsiTop} y2={rsiTop} className="indicatorDivider"/>
-        <text x={PAD_X} y={rsiTop+15} className="indicatorLabel">RSI 14 {lastRsi?.toFixed(1) ?? '—'}</text>
-        {[30,50,70].map((level) => <line key={level} x1={PAD_X} x2={W-PAD_X} y1={rsiY(level)} y2={rsiY(level)} className={level===50 ? 'indicatorMid' : 'indicatorGuide'}/>)}
-        <path d={pathFrom(rsi,x,rsiY)} className="rsiPath" fill="none"/>
+        {indicators.rsi ? <>
+          <line x1={PAD_X} x2={W-PAD_X} y1={rsiTop} y2={rsiTop} className="indicatorDivider"/>
+          <text x={PAD_X} y={rsiTop+15} className="indicatorLabel">RSI 14 {lastRsi?.toFixed(1) ?? '—'}</text>
+          {[30,50,70].map((level) => <line key={level} x1={PAD_X} x2={W-PAD_X} y1={rsiY(level)} y2={rsiY(level)} className={level===50 ? 'indicatorMid' : 'indicatorGuide'}/>)}
+          <path d={pathFrom(rsi,x,rsiY)} className="rsiPath" fill="none"/>
+        </> : null}
 
-        <line x1={PAD_X} x2={W-PAD_X} y1={macdTop} y2={macdTop} className="indicatorDivider"/>
-        <text x={PAD_X} y={macdTop+15} className="indicatorLabel">MACD 12 26 9 {lastMacd?.toFixed(2) ?? '—'} / {lastSignal?.toFixed(2) ?? '—'}</text>
-        <line x1={PAD_X} x2={W-PAD_X} y1={macdY(0)} y2={macdY(0)} className="indicatorMid"/>
-        {hist.map((value,index) => <rect key={index} x={x(index)-2.2} y={Math.min(macdY(value),macdY(0))} width={4.4} height={Math.max(1,Math.abs(macdY(value)-macdY(0)))} className={value>=0 ? 'macdBar positive' : 'macdBar negative'}/>)}
-        <path d={pathFrom(macd,x,macdY)} className="macdPath" fill="none"/><path d={pathFrom(signal,x,macdY)} className="signalPath" fill="none"/>
+        {indicators.macd ? <>
+          <line x1={PAD_X} x2={W-PAD_X} y1={macdTop} y2={macdTop} className="indicatorDivider"/>
+          <text x={PAD_X} y={macdTop+15} className="indicatorLabel">MACD 12 26 9 {lastMacd?.toFixed(2) ?? '—'} / {lastSignal?.toFixed(2) ?? '—'}</text>
+          <line x1={PAD_X} x2={W-PAD_X} y1={macdY(0)} y2={macdY(0)} className="indicatorMid"/>
+          {hist.map((value,index) => <rect key={index} x={x(index)-2.2} y={Math.min(macdY(value),macdY(0))} width={4.4} height={Math.max(1,Math.abs(macdY(value)-macdY(0)))} className={value>=0 ? 'macdBar positive' : 'macdBar negative'}/>)}
+          <path d={pathFrom(macd,x,macdY)} className="macdPath" fill="none"/><path d={pathFrom(signal,x,macdY)} className="signalPath" fill="none"/>
+        </> : null}
 
-        <line x1={PAD_X} x2={W-PAD_X} y1={volTop} y2={volTop} className="indicatorDivider"/>
-        <text x={PAD_X} y={volTop+14} className="indicatorLabel">VOL · Rel {relVol.toFixed(2)}x</text>
-        {visible.map((bar,index) => <rect key={`v-${bar.time}`} x={x(index)-2.4} y={volY(bar.volume)} width={4.8} height={Math.max(1,volTop+VOL_H-volY(bar.volume))} className={bar.close>=bar.open ? 'volumeBar positive' : 'volumeBar negative'}/>)}
+        {indicators.volume ? <>
+          <line x1={PAD_X} x2={W-PAD_X} y1={volTop} y2={volTop} className="indicatorDivider"/>
+          <text x={PAD_X} y={volTop+14} className="indicatorLabel">VOL · Rel {relVol.toFixed(2)}x</text>
+          {visible.map((bar,index) => <rect key={`v-${bar.time}`} x={x(index)-2.4} y={volY(bar.volume)} width={4.8} height={Math.max(1,volTop+VOL_H-volY(bar.volume))} className={bar.close>=bar.open ? 'volumeBar positive' : 'volumeBar negative'}/>)}
+        </> : null}
       </svg>
       <div className="chartLegend">
         <span><b>{snapshot.currentPrice.toFixed(2)}</b> último</span>
-        <span className="emaLegend ema9Legend">EMA9 <b>{snapshot.ema9 ?? '—'}</b></span>
-        <span className="emaLegend ema21Legend">EMA21 <b>{snapshot.ema21 ?? '—'}</b></span>
-        <span className="emaLegend ema50Legend">EMA50 <b>{snapshot.ema50 ?? '—'}</b></span>
-        <span className="emaLegend ema200Legend">EMA200 <b>{snapshot.ema200 ?? '—'}</b></span>
-        <span>RSI14 <b>{snapshot.rsi14 ?? '—'}</b></span>
+        {indicators.ema ? <><span className="emaLegend ema9Legend">EMA9 <b>{snapshot.ema9 ?? '—'}</b></span><span className="emaLegend ema21Legend">EMA21 <b>{snapshot.ema21 ?? '—'}</b></span><span className="emaLegend ema50Legend">EMA50 <b>{snapshot.ema50 ?? '—'}</b></span><span className="emaLegend ema200Legend">EMA200 <b>{snapshot.ema200 ?? '—'}</b></span></> : null}
+        {indicators.rsi ? <span>RSI14 <b>{snapshot.rsi14 ?? '—'}</b></span> : null}
         <span>ATR14 <b>{snapshot.atr14 ?? '—'}</b></span>
-        <span>MACD <b>{lastMacd?.toFixed(2) ?? '—'}</b></span>
-        <span>RelVol <b>{relVol.toFixed(2)}x</b></span>
-        <span>Tendencia <b>{snapshot.trend}</b></span>
-        <span>Estructura <b>{snapshot.structure}</b></span>
+        {indicators.macd ? <span>MACD <b>{lastMacd?.toFixed(2) ?? '—'}</b></span> : null}
+        {indicators.volume ? <span>RelVol <b>{relVol.toFixed(2)}x</b></span> : null}
+        <span>Tendencia <b>{snapshot.trend}</b></span><span>Estructura <b>{snapshot.structure}</b></span>
       </div>
     </div>
   );

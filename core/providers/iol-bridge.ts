@@ -1,5 +1,6 @@
 import type { BrokerAdapter } from '@/core/adapters/contracts';
 import type { Position } from '@/core/domain/trading';
+import { getIolDirectApiAdapter } from '@/core/providers/iol-direct';
 
 interface BridgePosition {
   symbol: string;
@@ -59,6 +60,9 @@ export class IOLBridgeBrokerAdapter implements BrokerAdapter {
 }
 
 export function getBrokerAdapter(): BrokerAdapter | null {
+  const direct = getIolDirectApiAdapter();
+  if (direct) return direct;
+
   const bridgeUrl = process.env.IOL_BRIDGE_URL?.trim();
   if (!bridgeUrl) return null;
   return new IOLBridgeBrokerAdapter(bridgeUrl, process.env.IOL_BRIDGE_TOKEN?.trim());

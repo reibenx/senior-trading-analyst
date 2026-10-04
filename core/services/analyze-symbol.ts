@@ -16,6 +16,7 @@ export interface AnalyzeSymbolInput {
   symbol: string;
   strategy: Strategy;
   timeframe: Timeframe;
+  includeSectorContext?: boolean;
 }
 
 export async function analyzeSymbol(input: AnalyzeSymbolInput) {
@@ -36,7 +37,9 @@ export async function analyzeSymbol(input: AnalyzeSymbolInput) {
   let marketContext = null;
   if (marketProvider.id !== 'demo-fixture') {
     const contextTimeframe = CONTEXT_TIMEFRAME[input.strategy];
-    const sectorSymbol = getSectorEtf(fundamentalSnapshot?.sector);
+    const sectorSymbol = input.includeSectorContext === false
+      ? undefined
+      : getSectorEtf(fundamentalSnapshot?.sector);
 
     try {
       const [benchmarkBars, sectorBars] = await Promise.all([

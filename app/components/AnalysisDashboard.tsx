@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { LineOverlay, OHLCVBar, TechnicalSnapshot, Timeframe, ZoneOverlay } from '@/core/domain/market';
 import type { Strategy } from '@/core/domain/trading';
+import { calculatePositionSizing } from '@/core/engines/risk';
 import { calculateTechnicalScore } from '@/core/engines/technical-score';
 
 interface Props {
@@ -54,13 +55,31 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
   const tp1 = getLineValue(snapshot, 'tp1');
   const tp2 = getLineValue(snapshot, 'tp2');
 
+  const riskPlan = useMemo(() => {
+    const parsedCapital = Number(capital.replace(',', '.'));
+    const parsedRisk = Number(risk.replace(',', '.'));
+    if (!entryA || stop === undefined) return null;
+
+    return calculatePositionSizing({
+      capital: parsedCapital,
+      riskPercent: parsedRisk,
+      entryPrice: entryA.high,
+      stopPrice: stop,
+      targetPrice: tp1,
+    });
+  }, [capital, risk, entryA, stop, tp1]);
+
+  const riskRewardScore = riskPlan?.riskReward === undefined
+    ? 0
+    : Math.round(Math.max(0, Math.min(100, riskPlan.riskReward * 25)));
+
   const scores: Array<[string, number]> = [
     ['Técnico', technicalScore],
-    ['Fundamental', 89],
-    ['Valuación', 68],
-    ['Mercado', 81],
-    ['Riesgo / Retorno', 77],
-    ['Convicción', 84],
+    ['Fundamental*', 89],
+    ['Valuación*', 68],
+    ['Mercado*', 81],
+    ['Riesgo / Retorno', riskRewardScore],
+    ['Convicción*', 84],
   ];
 
   function onStrategyChange(nextStrategy: Strategy) {
@@ -194,11 +213,23 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
 
           <hr />
           <h3>Gestión de riesgo</h3>
-          <p>Capital configurado <b>USD {capital || '—'}</b> · riesgo máximo <b>{risk || '—'}%</b>.</p>
+          {riskPlan ? (
+            <>
+              <p>Presupuesto de riesgo <b>USD {riskPlan.riskBudget.toFixed(2)}</b></p>
+              <p>Riesgo por unidad <b>USD {riskPlan.riskPerUnit.toFixed(2)}</b></p>
+              <p>Tamaño máximo <b>{riskPlan.quantity} unidades</b></p>
+              <p>Capital utilizado <b>USD {riskPlan.positionValue.toFixed(2)} ({riskPlan.capitalUtilizationPercent}%)</b></p>
+              <p>R/R a TP1 <b>{riskPlan.riskReward !== undefined ? `1:${riskPlan.riskReward.toFixed(2)}` : '—'}</b></p>
+            </>
+          ) : (
+            <p>Ingresá capital y riesgo válidos para calcular position sizing.</p>
+          )}
 
           <hr />
           <h3>Qué invalida la tesis</h3>
           <p>Ruptura estructural, pérdida del stop técnico, deterioro fundamental o cambio relevante del régimen de mercado.</p>
+
+          <p><small>* Scores todavía demostrativos hasta conectar datos fundamentales y contexto de mercado reales.</small></p>
         </aside>
       </section>
     </main>

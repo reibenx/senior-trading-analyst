@@ -52,7 +52,9 @@ export interface TechnicalSnapshot {
   symbol: string;
   timeframe: Timeframe;
   currentPrice: number;
+  ema9?: number;
   ema20?: number;
+  ema21?: number;
   ema50?: number;
   ema200?: number;
   atr14?: number;

@@ -1,4 +1,4 @@
-import { AnalysisDashboard } from '@/app/components/AnalysisDashboard';
+import { AnalysisDashboardV2 } from '@/app/components/AnalysisDashboardV2';
 import { buildTechnicalSnapshot } from '@/core/engines/technical';
 import { createDemoBars } from '@/core/fixtures/demo-market';
 
@@ -10,5 +10,5 @@ export default function Home() {
     bars: initialBars,
   });
 
-  return <AnalysisDashboard initialBars={initialBars} initialSnapshot={initialSnapshot} />;
+  return <AnalysisDashboardV2 initialBars={initialBars} initialSnapshot={initialSnapshot} />;
 }

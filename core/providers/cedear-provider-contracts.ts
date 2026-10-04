@@ -13,12 +13,25 @@ export interface CedearRatioRecord {
   source: string;
 }
 
+export interface CedearAssetMetadata {
+  symbol: string;
+  arsSymbol?: string;
+  dollarSymbol?: string;
+  cableSymbol?: string;
+  assetType?: string;
+  currency?: string;
+  settlementTerm?: string;
+  updatedAt: string;
+  source: string;
+}
+
 export interface LocalQuoteRecord {
   symbol: string;
   localPriceArs: number;
   localBidArs?: number;
   localAskArs?: number;
   impliedCclArsPerUsd?: number;
+  cableSymbol?: string;
   marketStatus: MarketStatus;
   quoteTimestamp: string;
   source: string;
@@ -33,6 +46,11 @@ export interface CclSnapshot {
 export interface CedearRatioProvider {
   readonly id: string;
   getRatios(symbols: string[]): Promise<CedearRatioRecord[]>;
+}
+
+export interface CedearAssetMetadataProvider {
+  readonly id: string;
+  getMetadata(symbols: string[]): Promise<CedearAssetMetadata[]>;
 }
 
 export interface LocalQuoteProvider {

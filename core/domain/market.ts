@@ -22,7 +22,8 @@ export type LineOverlayKind =
   | 'trendline'
   | 'stop'
   | 'target'
-  | 'vwap';
+  | 'vwap'
+  | 'fibonacci';
 
 export type OverlayKind = LineOverlayKind | 'entry-zone';
 

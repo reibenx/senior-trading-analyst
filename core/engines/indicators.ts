@@ -48,7 +48,7 @@ export function rsi(values: number[], period = 14): number | undefined {
   return 100 - 100 / (1 + rs);
 }
 
-export function recentPivotLows(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+function pivotLowsChronological(bars: OHLCVBar[], window: number): number[] {
   const pivots: number[] = [];
   for (let i = window; i < bars.length - window; i += 1) {
     const low = bars[i].low;
@@ -61,10 +61,10 @@ export function recentPivotLows(bars: OHLCVBar[], window = 3, limit = 3): number
     }
     if (isPivot) pivots.push(low);
   }
-  return pivots.slice(-limit).sort((a, b) => b - a);
+  return pivots;
 }
 
-export function recentPivotHighs(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+function pivotHighsChronological(bars: OHLCVBar[], window: number): number[] {
   const pivots: number[] = [];
   for (let i = window; i < bars.length - window; i += 1) {
     const high = bars[i].high;
@@ -77,5 +77,15 @@ export function recentPivotHighs(bars: OHLCVBar[], window = 3, limit = 3): numbe
     }
     if (isPivot) pivots.push(high);
   }
-  return pivots.slice(-limit).sort((a, b) => a - b);
+  return pivots;
+}
+
+export function recentPivotLows(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+  if (window < 1 || limit < 1) return [];
+  return pivotLowsChronological(bars, window).slice(-limit);
+}
+
+export function recentPivotHighs(bars: OHLCVBar[], window = 3, limit = 3): number[] {
+  if (window < 1 || limit < 1) return [];
+  return pivotHighsChronological(bars, window).slice(-limit);
 }

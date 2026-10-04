@@ -57,4 +57,11 @@ export interface PortfolioOpportunitySummary {
   opportunities: PortfolioOpportunity[];
   allocationPlan?: MonthlyAllocationPlan;
   errors: Array<{ symbol: string; error: string }>;
+  cache?: {
+    enabled: boolean;
+    hits: number;
+    refreshed: number;
+    ttlSeconds: number;
+    portfolioFingerprint: string;
+  };
 }

@@ -18,6 +18,7 @@ export interface AnalyzeSymbolInput {
   timeframe: Timeframe;
   includeSectorContext?: boolean;
   includeFundamentals?: boolean;
+  includeMarketContext?: boolean;
 }
 
 export async function analyzeSymbol(input: AnalyzeSymbolInput) {
@@ -36,7 +37,7 @@ export async function analyzeSymbol(input: AnalyzeSymbolInput) {
   const fundamentalScore = fundamentalSnapshot ? calculateFundamentalScore(fundamentalSnapshot) : null;
 
   let marketContext = null;
-  if (marketProvider.id !== 'demo-fixture') {
+  if (input.includeMarketContext !== false && marketProvider.id !== 'demo-fixture') {
     const contextTimeframe = CONTEXT_TIMEFRAME[input.strategy];
     const sectorSymbol = input.includeSectorContext === false
       ? undefined

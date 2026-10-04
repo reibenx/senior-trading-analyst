@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getExecutionPolicy } from '@/core/execution/execution-policy';
 
 function configured(...names: string[]) {
   return names.every((name) => Boolean(process.env[name]?.trim()));
@@ -16,6 +17,7 @@ export async function GET() {
   const quoteAvailable = directIol
     || Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
   const compositeCedear = configured('CEDEAR_RATIO_BRIDGE_URL') && quoteAvailable;
+  const executionPolicy = getExecutionPolicy();
 
   const modules = {
     appAuth: configured('APP_ACCESS_USER', 'APP_ACCESS_PASSWORD'),
@@ -37,8 +39,12 @@ export async function GET() {
       purpose: 'explicit ARS/D/cable related symbols',
     },
     iolOrders: {
-      ready: Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()),
-      mode: process.env.IOL_ORDER_BRIDGE_URL?.trim() ? 'dedicated-bridge' : bridgeIol ? 'bridge' : 'unconfigured',
+      ready: executionPolicy.validationEnabled
+        && Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()),
+      mode: executionPolicy.mode,
+      validationEnabled: executionPolicy.validationEnabled,
+      placementEnabled: executionPolicy.placementEnabled,
+      reason: executionPolicy.reason,
     },
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,

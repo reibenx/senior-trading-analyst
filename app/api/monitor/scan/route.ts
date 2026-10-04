@@ -1,0 +1,117 @@
+import { NextResponse } from 'next/server';
+import type { Strategy } from '@/core/domain/trading';
+import type { Timeframe } from '@/core/domain/market';
+import { MonitoringAgent } from '@/core/monitoring/agent';
+import { defaultMonitorRules } from '@/core/monitoring/rules';
+import { getBrokerAdapter } from '@/core/providers/iol-bridge';
+import { getNotificationProviders } from '@/core/providers/notifications';
+import { analyzeSymbol } from '@/core/services/analyze-symbol';
+import { buildTradePlan } from '@/core/services/build-trade-plan';
+
+const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
+  day: '15m',
+  swing: '1d',
+  position: '1w',
+};
+
+interface ScanTarget {
+  symbol: string;
+  strategy: Strategy;
+}
+
+function authorized(request: Request): boolean {
+  const expected = process.env.MONITOR_CRON_TOKEN?.trim();
+  if (!expected) return false;
+  return request.headers.get('authorization') === `Bearer ${expected}`;
+}
+
+function parseStrategy(value?: string): Strategy {
+  if (value === 'day' || value === 'swing' || value === 'position') return value;
+  return 'position';
+}
+
+function parseWatchlist(): ScanTarget[] {
+  const raw = process.env.MONITOR_WATCHLIST?.trim();
+  if (!raw) return [];
+
+  return raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const [symbol, strategy] = item.split(':').map((part) => part.trim());
+      return { symbol: symbol.toUpperCase(), strategy: parseStrategy(strategy) };
+    })
+    .filter((item) => item.symbol.length > 0);
+}
+
+function dedupeTargets(targets: ScanTarget[]): ScanTarget[] {
+  const map = new Map<string, ScanTarget>();
+  for (const target of targets) {
+    if (!map.has(target.symbol)) map.set(target.symbol, target);
+  }
+  return [...map.values()];
+}
+
+export async function POST(request: Request) {
+  if (!authorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const broker = getBrokerAdapter();
+  const positions = broker ? await broker.getPositions().catch(() => []) : [];
+  const portfolioStrategy = parseStrategy(process.env.MONITOR_PORTFOLIO_STRATEGY?.trim());
+
+  const portfolioTargets = positions
+    .filter((position) => position.quantity > 0)
+    .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy }));
+
+  const targets = dedupeTargets([...portfolioTargets, ...parseWatchlist()]);
+  const configuredMax = Number(process.env.MONITOR_MAX_SYMBOLS ?? 50);
+  const maxSymbols = Number.isFinite(configuredMax) ? Math.max(1, Math.min(100, Math.floor(configuredMax))) : 50;
+  const scanTargets = targets.slice(0, maxSymbols);
+
+  const providers = getNotificationProviders();
+  const agent = new MonitoringAgent(defaultMonitorRules, providers);
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const target of scanTargets) {
+    try {
+      const analysis = await analyzeSymbol({
+        symbol: target.symbol,
+        strategy: target.strategy,
+        timeframe: DEFAULT_TIMEFRAME[target.strategy],
+      });
+
+      const plan = buildTradePlan({
+        strategy: target.strategy,
+        snapshot: analysis.snapshot,
+        fundamentalScore: analysis.fundamentalScore,
+        marketContext: analysis.marketContext,
+        positions,
+      });
+
+      const events = await agent.evaluate(plan);
+      results.push({
+        symbol: target.symbol,
+        strategy: target.strategy,
+        decision: plan.decision,
+        conviction: plan.scores.conviction,
+        events,
+      });
+    } catch (error) {
+      results.push({
+        symbol: target.symbol,
+        strategy: target.strategy,
+        error: error instanceof Error ? error.message : 'Unknown scan error',
+      });
+    }
+  }
+
+  return NextResponse.json({
+    scanned: scanTargets.length,
+    portfolioPositions: positions.length,
+    notificationProviders: providers.map((provider) => provider.id),
+    results,
+  });
+}

@@ -29,6 +29,12 @@ function finite(value: unknown): number | undefined {
   return Number.isFinite(number) && number > 0 ? number : undefined;
 }
 
+export function calculateImpliedCcl(localPriceArs: number, cablePriceUsd: number): number | undefined {
+  if (!Number.isFinite(localPriceArs) || !Number.isFinite(cablePriceUsd)) return undefined;
+  if (localPriceArs <= 0 || cablePriceUsd <= 0) return undefined;
+  return localPriceArs / cablePriceUsd;
+}
+
 function findPriceByKeys(value: unknown, keys: string[]): number | undefined {
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -110,12 +116,12 @@ export class IolDirectQuoteProvider implements LocalQuoteProvider {
       if (cableSymbol) {
         try {
           const cable = await this.fetchQuote(cableSymbol);
-          impliedCclArsPerUsd = local.price / cable.price;
+          impliedCclArsPerUsd = calculateImpliedCcl(local.price, cable.price);
           effectiveTimestamp = oldestTimestamp(local.timestamp, cable.timestamp);
           source = `iol-direct-api:${symbol}/${cableSymbol}`;
         } catch {
-          // A missing or stale cable quote must not break the ARS quote. The
-          // composite provider can still use a global CCL fallback.
+          // A missing cable quote must not break the ARS quote. The composite
+          // provider can still use a global CCL fallback.
         }
       }
 

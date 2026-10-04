@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
+import { getAlertStateStore } from '@/core/monitoring/state-store';
 import { getNotificationProviders } from '@/core/providers/notifications';
 
 const zoneSchema = z.object({ low: z.number(), high: z.number() });
@@ -44,6 +45,11 @@ function authorized(request: Request): boolean {
   return header === `Bearer ${expected}`;
 }
 
+function alertTtlSeconds(): number {
+  const configured = Number(process.env.ALERT_DEDUP_TTL_SECONDS ?? 86400);
+  return Number.isFinite(configured) ? Math.max(300, Math.min(604800, Math.floor(configured))) : 86400;
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -52,7 +58,8 @@ export async function POST(request: Request) {
   try {
     const { plans } = requestSchema.parse(await request.json());
     const providers = getNotificationProviders();
-    const agent = new MonitoringAgent(defaultMonitorRules, providers);
+    const stateStore = getAlertStateStore();
+    const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds());
     const events = [];
 
     for (const plan of plans) {
@@ -63,6 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       processedPlans: plans.length,
       notificationProviders: providers.map((provider) => provider.id),
+      persistentDeduplication: Boolean(stateStore),
       events,
     });
   } catch (error) {

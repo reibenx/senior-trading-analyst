@@ -5,7 +5,9 @@ import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { FundamentalScore, FundamentalSnapshot } from '@/core/domain/fundamentals';
 import type { LineOverlay, OHLCVBar, TechnicalSnapshot, Timeframe, ZoneOverlay } from '@/core/domain/market';
 import type { Strategy } from '@/core/domain/trading';
+import { decide } from '@/core/engines/decision';
 import { calculatePositionSizing } from '@/core/engines/risk';
+import { calculateScores } from '@/core/engines/scoring';
 import { calculateTechnicalScore } from '@/core/engines/technical-score';
 
 interface Props {
@@ -88,13 +90,29 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     ? 0
     : Math.round(Math.max(0, Math.min(100, riskPlan.riskReward * 25)));
 
+  const scoreCard = useMemo(() => calculateScores(strategy, {
+    technical: technicalScore,
+    fundamental: fundamentalScore?.total ?? 50,
+    valuation: fundamentalScore?.valuation ?? 50,
+    market: 50,
+    riskReward: riskRewardScore,
+    portfolioFit: 50,
+  }), [strategy, technicalScore, fundamentalScore, riskRewardScore]);
+
+  const decisionResult = useMemo(() => decide({
+    strategy,
+    scores: scoreCard,
+    technical: snapshot,
+    alreadyOwned: false,
+  }), [strategy, scoreCard, snapshot]);
+
   const scores: Array<[string, number | null]> = [
     ['Técnico', technicalScore],
     ['Fundamental', fundamentalScore?.total ?? null],
     ['Valuación', fundamentalScore?.valuation ?? null],
     ['Mercado*', null],
     ['Riesgo / Retorno', riskRewardScore],
-    ['Convicción*', null],
+    ['Convicción*', scoreCard.conviction],
   ];
 
   function onStrategyChange(nextStrategy: Strategy) {
@@ -140,9 +158,6 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
     }
   }
 
-  const decision = snapshot.trend === 'BULL' ? 'MANTENER' : snapshot.trend === 'BEAR' ? 'REDUCIR / ESPERAR' : 'ESPERAR';
-  const subDecision = snapshot.trend === 'BULL' ? 'Aumentar en pullback' : snapshot.trend === 'BEAR' ? 'Evitar nuevas entradas' : 'Esperar confirmación';
-
   return (
     <main>
       <header className="topbar">
@@ -183,13 +198,18 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
 
         <aside className="panel decision">
           <span className="eyebrow">DECISIÓN {source === 'demo-fixture' ? 'DEMO' : ''}</span>
-          <h1>{decision}</h1><h3>{subDecision}</h3>
-          <div className="conviction"><span>Técnico</span><b>{technicalScore}/100</b></div>
+          <h1>{decisionResult.headline}</h1>
+          <h3>{strategy.toUpperCase()} · convicción provisional {scoreCard.conviction}/100</h3>
+          <div className="conviction"><span>Modelo</span><b>{scoreCard.conviction}/100</b></div>
 
           <hr /><h3>Plan técnico automático</h3>
           <p>Entry A <b>{entryA ? `$${entryA.low.toFixed(2)}–$${entryA.high.toFixed(2)}` : '—'}</b></p>
           <p>Entry B <b>{entryB ? `$${entryB.low.toFixed(2)}–$${entryB.high.toFixed(2)}` : '—'}</b></p>
           <p>Stop <b>{stop !== undefined ? `$${stop.toFixed(2)}` : '—'}</b></p><p>TP1 <b>{tp1 !== undefined ? `$${tp1.toFixed(2)}` : '—'}</b></p><p>TP2 <b>{tp2 !== undefined ? `$${tp2.toFixed(2)}` : '—'}</b></p>
+
+          <hr /><h3>Razonamiento del modelo</h3>
+          {decisionResult.reasons.length ? decisionResult.reasons.map((reason) => <p key={reason}>• {reason}</p>) : <p>Sin señales positivas suficientes.</p>}
+          {decisionResult.warnings.map((warning) => <p key={warning}>⚠ {warning}</p>)}
 
           <hr /><h3>Diagnóstico técnico</h3>
           <p>Tendencia <b>{snapshot.trend}</b> · estructura <b>{snapshot.structure}</b>.</p>
@@ -205,13 +225,13 @@ export function AnalysisDashboard({ initialBars, initialSnapshot }: Props) {
               <p>ROE <b>{formatPercent(fundamentals.returnOnEquity)}</b> · margen neto <b>{formatPercent(fundamentals.profitMargin)}</b></p>
               <p>Revenue YoY <b>{formatPercent(fundamentals.revenueGrowthYoY)}</b> · EPS YoY <b>{formatPercent(fundamentals.earningsGrowthYoY)}</b></p>
             </>
-          ) : <p>Sin proveedor fundamental configurado; no se inventan scores.</p>}
+          ) : <p>Sin proveedor fundamental configurado; se usa un valor neutral sólo para la convicción provisional.</p>}
 
           <hr /><h3>Gestión de riesgo</h3>
           {riskPlan ? <><p>Presupuesto de riesgo <b>USD {riskPlan.riskBudget.toFixed(2)}</b></p><p>Riesgo por unidad <b>USD {riskPlan.riskPerUnit.toFixed(2)}</b></p><p>Tamaño máximo <b>{riskPlan.quantity} unidades</b></p><p>Capital utilizado <b>USD {riskPlan.positionValue.toFixed(2)} ({riskPlan.capitalUtilizationPercent}%)</b></p><p>R/R a TP1 <b>{riskPlan.riskReward !== undefined ? `1:${riskPlan.riskReward.toFixed(2)}` : '—'}</b></p></> : <p>Ingresá capital y riesgo válidos para calcular position sizing.</p>}
 
           <hr /><h3>Qué invalida la tesis</h3><p>Ruptura estructural, pérdida del stop técnico, deterioro fundamental o cambio relevante del régimen de mercado.</p>
-          <p><small>* Mercado y Convicción se activarán cuando conectemos contexto macro/sector y el Decision Engine completo.</small></p>
+          <p><small>* Mercado y Portfolio Fit permanecen neutrales hasta conectar contexto macro/sector y la cartera IOL; por eso la convicción se muestra como provisional.</small></p>
         </aside>
       </section>
     </main>

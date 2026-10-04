@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { buildTechnicalSnapshot } from '@/core/engines/technical';
-import { createDemoBars } from '@/core/fixtures/demo-market';
+import { getMarketDataProvider } from '@/core/providers/market-provider';
 
 const requestSchema = z.object({
   symbol: z.string().trim().min(1).max(20).transform((value) => value.toUpperCase()),
@@ -11,20 +11,17 @@ const requestSchema = z.object({
 export async function POST(request: Request) {
   try {
     const payload = requestSchema.parse(await request.json());
-    // Temporal: fixture determinístico hasta conectar un MarketDataProvider real.
-    const bars = createDemoBars();
+    const provider = getMarketDataProvider();
+    const bars = await provider.getBars({ symbol: payload.symbol, timeframe: payload.timeframe, limit: 260 });
     const snapshot = buildTechnicalSnapshot({ symbol: payload.symbol, timeframe: payload.timeframe, bars });
 
-    return NextResponse.json({
-      source: 'demo-fixture',
-      bars,
-      snapshot,
-    });
+    return NextResponse.json({ source: provider.id, bars, snapshot });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: 'Invalid analysis request', details: error.issues }, { status: 400 });
     }
 
-    return NextResponse.json({ error: 'Unable to analyze symbol' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unable to analyze symbol';
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

@@ -6,6 +6,8 @@ function configured(...names: string[]) {
 
 export async function GET() {
   const marketDataProvider = process.env.MARKET_DATA_PROVIDER?.trim() || 'auto';
+  const directIol = configured('IOL_API_USERNAME', 'IOL_API_PASSWORD');
+  const bridgeIol = configured('IOL_BRIDGE_URL');
   const allInOneCedear = configured('CEDEAR_CONVERSION_BRIDGE_URL');
   const compositeCedear = configured('CEDEAR_RATIO_BRIDGE_URL')
     && Boolean(process.env.IOL_QUOTE_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
@@ -16,8 +18,14 @@ export async function GET() {
       ? { ready: true, mode: 'demo' }
       : { ready: configured('TWELVE_DATA_API_KEY'), mode: marketDataProvider },
     fundamentals: { ready: configured('ALPHA_VANTAGE_API_KEY') },
-    iolPortfolio: { ready: configured('IOL_BRIDGE_URL') },
-    iolOrders: { ready: Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()) },
+    iolPortfolio: {
+      ready: directIol || bridgeIol,
+      mode: directIol ? 'direct-api' : bridgeIol ? 'bridge' : 'unconfigured',
+    },
+    iolOrders: {
+      ready: Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim()),
+      mode: process.env.IOL_ORDER_BRIDGE_URL?.trim() ? 'dedicated-bridge' : bridgeIol ? 'bridge' : 'unconfigured',
+    },
     cedearConversion: {
       ready: allInOneCedear || compositeCedear,
       mode: allInOneCedear ? 'all-in-one' : compositeCedear ? 'composite' : 'unconfigured',

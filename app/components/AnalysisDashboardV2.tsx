@@ -119,10 +119,13 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
     setStrategy(next); const allowed = STRATEGY_TIMEFRAMES[next]; if (!allowed.includes(timeframe)) setTimeframe(allowed[0]);
   }
 
-  async function handleAnalyze(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const clean = symbol.trim().toUpperCase();
-    if (!clean) { setError('Ingresá un ticker válido.'); return; }
+  async function runFullAnalysis(requestedSymbol: string) {
+    const clean = requestedSymbol.trim().toUpperCase();
+    if (!clean || loading) {
+      if (!clean) setError('Ingresá un ticker válido.');
+      return;
+    }
+    setSymbol(clean);
     setLoading(true); setError(null); setNews(null); setEvents(null); setInsightsError(null);
     try {
       const [analysisResponse, portfolioResponse] = await Promise.all([
@@ -132,11 +135,16 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       const result = await analysisResponse.json() as AnalyzeResponse;
       if (!analysisResponse.ok || !result.snapshot || !result.bars) throw new Error(result.error ?? 'No fue posible analizar el ticker.');
       const portfolio = await portfolioResponse.json() as PortfolioResponse;
-      setSymbol(clean); setBars(result.bars); setSnapshot(result.snapshot); setSource(result.source);
+      setBars(result.bars); setSnapshot(result.snapshot); setSource(result.source);
       setFundamentals(result.fundamentals ?? null); setFundamentalScore(result.fundamentalScore ?? null); setFundamentalSource(result.fundamentalSource ?? null);
       setMarketContext(result.marketContext ?? null); setPortfolioConnected(Boolean(portfolioResponse.ok && portfolio.connected)); setPortfolioBroker(portfolio.broker ?? null); setPositions(portfolio.positions ?? []);
     } catch (e) { setError(e instanceof Error ? e.message : 'Error inesperado al analizar el ticker.'); }
     finally { setLoading(false); }
+  }
+
+  async function handleAnalyze(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await runFullAnalysis(symbol);
   }
 
   async function changeTimeframe(next: Timeframe) {
@@ -209,7 +217,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
           <div><dt>Cantidad</dt><dd>{activePosition.quantity}</dd></div><div><dt>Precio promedio</dt><dd>{fmtMoney(activePosition.averagePrice,activePosition.currency)}</dd></div><div><dt>Precio actual</dt><dd>{fmtMoney(positionUnitPrice,activePosition.currency)}</dd></div><div><dt>Ganancia / Pérdida</dt><dd className={(positionPnlPercent??0)>=0?'positive':'negative'}>{positionPnlPercent===undefined?'—':`${positionPnlPercent>=0?'+':''}${positionPnlPercent.toFixed(1)}%`}</dd></div><div><dt>Valor de la posición</dt><dd>{fmtMoney(activePosition.marketValue,activePosition.currency)}</dd></div><div><dt>Peso en la cartera</dt><dd>{portfolioFit?`${portfolioFit.currentWeightPercent.toFixed(1)}%`:'—'}</dd></div>
         </dl><div className="positionActions"><a href="https://www.invertironline.com" target="_blank" rel="noreferrer">Ver en IOL</a><Link href="/sandbox">Operar</Link></div></>:<p className="mutedText">{portfolioConnected?'El ticker no forma parte de tu cartera actual.':'La cartera IOL se carga al ejecutar el análisis.'}</p>}</section>
 
-        <section className="surface quickSurface"><h2>Lista rápida</h2><div className="quickTabs"><button className="active">Mis tickers</button><button>Watchlist</button></div>{quickPositions.length?quickPositions.map((p)=><button className="quickTicker" key={p.symbol} type="button" onClick={()=>setSymbol(p.symbol)}><span>◉</span><b>{p.symbol}</b><small>{totalPortfolioValue>0&&p.marketValue?`${((p.marketValue/totalPortfolioValue)*100).toFixed(1)}% cartera`:`${p.quantity} u.`}</small></button>):<p className="mutedText">Analizá un ticker para cargar posiciones IOL.</p>}</section>
+        <section className="surface quickSurface"><h2>Lista rápida</h2><div className="quickTabs"><button className="active">Mis tickers</button><button>Watchlist</button></div>{quickPositions.length?quickPositions.map((p)=><button className={`quickTicker ${snapshot.symbol.toUpperCase()===p.symbol.toUpperCase()?'selected':''}`} key={p.symbol} type="button" disabled={loading} onClick={()=>void runFullAnalysis(p.symbol)}><span>◉</span><b>{p.symbol}</b><small>{totalPortfolioValue>0&&p.marketValue?`${((p.marketValue/totalPortfolioValue)*100).toFixed(1)}% cartera`:`${p.quantity} u.`}</small></button>):<p className="mutedText">Analizá un ticker para cargar posiciones IOL.</p>}</section>
       </aside>
 
       <section className="analystCenter">

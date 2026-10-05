@@ -120,6 +120,7 @@ export async function POST(request: Request) {
         strategy: target.strategy,
         decision: plan.decision,
         conviction: plan.scores.conviction,
+        riskProfile: plan.riskProfile,
         events,
       });
     } catch (error) {

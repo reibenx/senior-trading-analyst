@@ -114,6 +114,7 @@ function FundamentalPanel({ fundamentals, score, source }: { fundamentals: Funda
 
 export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const [symbol, setSymbol] = useState(initialSnapshot.symbol);
+  const [topSearch, setTopSearch] = useState(initialSnapshot.symbol);
   const [strategy, setStrategy] = useState<Strategy>('swing');
   const [timeframe, setTimeframe] = useState<Timeframe>(initialSnapshot.timeframe);
   const [chartRange, setChartRange] = useState<ChartRange>('Todos');
@@ -173,7 +174,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   async function runFullAnalysis(requestedSymbol: string) {
     const clean = requestedSymbol.trim().toUpperCase();
     if (!clean || loading) { if (!clean) setError('Ingresá un ticker válido.'); return; }
-    setSymbol(clean); setChartRange('Todos');
+    setSymbol(clean); setTopSearch(clean); setChartRange('Todos');
     setLoading(true); setError(null); setNews(null); setEvents(null); setInsightsError(null);
     try {
       const [analysisResponse, portfolioResponse] = await Promise.all([
@@ -191,6 +192,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   }
 
   async function handleAnalyze(event: FormEvent<HTMLFormElement>) { event.preventDefault(); await runFullAnalysis(symbol); }
+  async function handleTopSearch(event: FormEvent<HTMLFormElement>) { event.preventDefault(); await runFullAnalysis(topSearch); }
 
   async function changeTimeframe(next: Timeframe) {
     if (next === timeframe || loading) return;
@@ -257,7 +259,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
     <header className="analystTopbar">
       <div className="brandBlock"><div className="brandMark">▥</div><div><strong>SENIOR TRADING ANALYST</strong><small>Análisis técnico + fundamental + tu cartera</small></div></div>
       <nav className="primaryNav" aria-label="Navegación principal"><Link className="active" href="/">⌁ Analizar Ticker</Link><Link href="/portfolio">▣ Mi Cartera (IOL)</Link><Link href="/opportunities">⌁ Oportunidades</Link><Link href="/alerts">♧ Alertas</Link><Link href="/market">♡ Mercado</Link></nav>
-      <div className="topActions"><Link href="/system">⚙</Link><span>⌕ Buscar ticker…</span><b>TU</b></div>
+      <div className="topActions"><Link href="/system" aria-label="Estado del sistema">⚙</Link><form className="topSearchForm" onSubmit={handleTopSearch}><span>⌕</span><input aria-label="Buscar ticker" placeholder="Buscar ticker…" value={topSearch} onChange={(e)=>setTopSearch(e.target.value.toUpperCase())} maxLength={20}/><button type="submit" disabled={loading || !topSearch.trim()}>{loading?'…':'Ir'}</button></form><b>TU</b></div>
     </header>
     <section className="analystGrid">
       <aside className="analystSidebar">

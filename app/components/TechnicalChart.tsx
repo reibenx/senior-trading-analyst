@@ -6,6 +6,9 @@ import type { LineOverlay, OHLCVBar, TechnicalSnapshot, ZoneOverlay } from '@/co
 interface Props {
   bars: OHLCVBar[];
   snapshot: TechnicalSnapshot;
+  comparisonBars?: OHLCVBar[];
+  comparisonSymbol?: string | null;
+  manualLevels?: number[];
 }
 
 type PricedLineOverlay = LineOverlay & { value: number };
@@ -107,7 +110,7 @@ function overlayClassName(line: PricedLineOverlay) {
   return `overlayLine ${line.kind} ${line.id}`;
 }
 
-export function TechnicalChart({ bars, snapshot }: Props) {
+export function TechnicalChart({ bars, snapshot, comparisonBars = [], comparisonSymbol = null, manualLevels = [] }: Props) {
   const [indicators, setIndicators] = useState<Record<IndicatorKey, boolean>>({
     ema: true,
     profile: true,
@@ -118,6 +121,15 @@ export function TechnicalChart({ bars, snapshot }: Props) {
 
   const visible = bars.slice(-80);
   const firstVisibleIndex = Math.max(0, bars.length - visible.length);
+  const comparisonByTime = new Map(comparisonBars.map((bar) => [bar.time, bar.close]));
+  const firstPrimary = visible[0]?.close;
+  const firstComparable = visible.map((bar) => comparisonByTime.get(bar.time)).find((value): value is number => typeof value === 'number');
+  const normalizedComparison = firstPrimary && firstComparable
+    ? visible.map((bar) => {
+        const close = comparisonByTime.get(bar.time);
+        return typeof close === 'number' ? firstPrimary * (close / firstComparable) : null;
+      })
+    : [];
   const closes = visible.map((bar) => bar.close);
   const rsi = rsiSeries(closes);
   const ema12 = emaSeries(closes, 12);
@@ -130,8 +142,9 @@ export function TechnicalChart({ bars, snapshot }: Props) {
     if (overlay.kind === 'entry-zone') return [overlay.low, overlay.high];
     return [overlay.value, overlay.from?.value, overlay.to?.value].filter((value): value is number => typeof value === 'number');
   });
-  const min = Math.min(...visible.map((bar) => bar.low), ...overlayValues);
-  const max = Math.max(...visible.map((bar) => bar.high), ...overlayValues);
+  const comparisonValues = normalizedComparison.filter((value): value is number => typeof value === 'number');
+  const min = Math.min(...visible.map((bar) => bar.low), ...overlayValues, ...comparisonValues, ...manualLevels);
+  const max = Math.max(...visible.map((bar) => bar.high), ...overlayValues, ...comparisonValues, ...manualLevels);
   const range = Math.max(1, max - min);
   const x = (index: number) => PAD_X + (index / Math.max(1, visible.length - 1)) * (W - PAD_X * 2);
   const xForTime = (time: string) => {
@@ -211,6 +224,15 @@ export function TechnicalChart({ bars, snapshot }: Props) {
 
         {segments.map((line) => <g key={line.id}><line x1={xForTime(line.from.time)} y1={yPrice(line.from.value)} x2={xForTime(line.to.time)} y2={yPrice(line.to.value)} className={`overlayLine ${line.kind} segmentLine ${line.id}`}/><text x={xForTime(line.to.time)-4} y={yPrice(line.to.value)-6} textAnchor="end" className={`overlayLabel ${line.kind}`}>{line.label}</text></g>)}
 
+        {manualLevels.map((level, index) => {
+          const py = yPrice(level);
+          return <g key={`manual-${index}-${level}`}><line x1={PAD_X} x2={W-PAD_X} y1={py} y2={py} className="manualLevelLine"/><text x={PAD_X+6} y={py-4} className="manualLevelLabel">Manual {level.toFixed(2)}</text></g>;
+        })}
+        {comparisonSymbol && comparisonValues.length > 1 ? <g className="comparisonOverlay">
+          <path d={pathFrom(normalizedComparison, x, yPrice)} className="comparisonPath" fill="none"/>
+          <text x={PAD_X + 6} y={PRICE_H - 10} className="comparisonLabel">{comparisonSymbol} normalizado</text>
+        </g> : null}
+
         {lines.map((line) => {
           if (line.kind === 'ema' && !indicators.ema) return null;
           const py = yPrice(line.value);
@@ -256,6 +278,8 @@ export function TechnicalChart({ bars, snapshot }: Props) {
         <span>ATR14 <b>{snapshot.atr14 ?? '—'}</b></span>
         {indicators.macd ? <span>MACD <b>{lastMacd?.toFixed(2) ?? '—'}</b></span> : null}
         {indicators.volume ? <span>RelVol <b>{relVol.toFixed(2)}x</b></span> : null}
+        {comparisonSymbol && comparisonValues.length > 1 ? <span className="comparisonLegend">Comparar <b>{comparisonSymbol}</b></span> : null}
+        {manualLevels.length ? <span>Dibujos <b>{manualLevels.length}</b></span> : null}
         <span>Tendencia <b>{snapshot.trend}</b></span><span>Estructura <b>{snapshot.structure}</b></span>
       </div>
     </div>

@@ -30,6 +30,12 @@ function fmtZone(label: string, zone: PriceZone | undefined): string | undefined
   return `${label} ${zone.low.toFixed(2)}–${zone.high.toFixed(2)}`;
 }
 
+function riskProfileText(plan: TradePlan): string {
+  const profile = plan.riskProfile;
+  if (!profile) return '';
+  return ` Perfil ${profile.label}: riesgo ${profile.riskPercent}% · máx. posición ${profile.maxPositionPercent}% · entrada ${profile.preferredEntry} · trailing ${profile.trailingAtr} ATR · salidas ${profile.tp1Percent}%/${profile.tp2Percent}%/${profile.runnerPercent}%.`;
+}
+
 function tradeLevels(plan: TradePlan): string {
   const parts = [
     fmtZone('Entry A', plan.entryA),
@@ -82,7 +88,7 @@ export const decisionSignalRule: MonitorRule = {
       plan,
       'DECISION_SIGNAL',
       `${plan.symbol} · ${signal.label}`,
-      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}${tradeLevels(plan)}`,
+      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}${riskProfileText(plan)}${tradeLevels(plan)}`,
       signal.severity,
       `${plan.symbol}:DECISION_SIGNAL:${plan.decision}:${convictionBucket}`,
     );
@@ -99,7 +105,7 @@ export const entryZoneRule: MonitorRule = {
       plan,
       'ENTRY_ZONE',
       `${plan.symbol} entró en zona de entrada`,
-      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.${riskProfileText(plan)}${tradeLevels(plan)}`,
       'OPPORTUNITY',
       `${plan.symbol}:ENTRY_ZONE:${active.low.toFixed(4)}:${active.high.toFixed(4)}`,
     );
@@ -114,7 +120,7 @@ export const stopBreachRule: MonitorRule = {
       plan,
       'STOP_BREACH',
       `${plan.symbol} perdió el stop técnico`,
-      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.${riskProfileText(plan)}${tradeLevels(plan)}`,
       'CRITICAL',
       `${plan.symbol}:STOP_BREACH:${plan.stop.toFixed(4)}`,
     );
@@ -132,7 +138,7 @@ export const targetHitRule: MonitorRule = {
       plan,
       'TARGET_HIT',
       `${plan.symbol} alcanzó TP${reachedIndex + 1}`,
-      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.${riskProfileText(plan)}${tradeLevels(plan)}`,
       'ACTION',
       `${plan.symbol}:TARGET_HIT:${reachedIndex + 1}:${target.toFixed(4)}`,
     );

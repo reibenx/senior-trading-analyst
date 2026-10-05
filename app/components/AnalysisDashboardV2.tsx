@@ -29,6 +29,8 @@ type ResearchTab = 'summary' | 'fundamental' | 'valuation' | 'expectations' | 's
 type ChartRange = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1A' | '5A' | 'Todos';
 type QuickTab = 'portfolio' | 'watchlist';
 type ChartToolPanel = 'drawings' | 'compare' | null;
+type EntryMode = 'A' | 'B' | 'custom';
+type StopMode = 'technical' | 'manual';
 
 const STRATEGY_TIMEFRAMES: Record<Strategy, Timeframe[]> = {
   day: ['1m', '5m', '15m', '1h'], swing: ['1h', '4h', '1d', '1w'], position: ['1d', '1w', '1M'],
@@ -134,6 +136,15 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const [watchlistReady, setWatchlistReady] = useState(false);
   const [capital, setCapital] = useState('5000');
   const [risk, setRisk] = useState('1.0');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<EntryMode>('A');
+  const [customEntry, setCustomEntry] = useState('');
+  const [stopMode, setStopMode] = useState<StopMode>('technical');
+  const [manualStop, setManualStop] = useState('');
+  const [maxPositionPercent, setMaxPositionPercent] = useState('25');
+  const [trailingAtr, setTrailingAtr] = useState('2.5');
+  const [tp1Percent, setTp1Percent] = useState('25');
+  const [tp2Percent, setTp2Percent] = useState('25');
   const [bars, setBars] = useState(initialBars);
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [source, setSource] = useState('demo-fixture');
@@ -160,11 +171,39 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const tp1 = getLineValue(snapshot, 'tp1');
   const tp2 = getLineValue(snapshot, 'tp2');
   const currentPrice = bars.at(-1)?.close ?? 0;
+  const effectiveEntry = useMemo(() => {
+    if (entryMode === 'A') return entryA?.high;
+    if (entryMode === 'B') return entryB?.high;
+    const value = Number(customEntry.replace(',', '.'));
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  }, [entryMode, entryA, entryB, customEntry]);
+  const effectiveStop = useMemo(() => {
+    if (stopMode === 'technical') return stop;
+    const value = Number(manualStop.replace(',', '.'));
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  }, [stopMode, stop, manualStop]);
+  const exitPlan = useMemo(() => {
+    const first = Math.max(0, Math.min(100, Number(tp1Percent.replace(',', '.')) || 0));
+    const second = Math.max(0, Math.min(100, Number(tp2Percent.replace(',', '.')) || 0));
+    const runner = Math.max(0, 100 - first - second);
+    const trailing = Math.max(0, Number(trailingAtr.replace(',', '.')) || 0);
+    return { tp1: first, tp2: second, runner, trailing };
+  }, [tp1Percent, tp2Percent, trailingAtr]);
+  const exitPlanValid = exitPlan.tp1 + exitPlan.tp2 <= 100 && exitPlan.trailing > 0;
   const riskPlan = useMemo(() => {
-    const c = Number(capital.replace(',', '.')); const r = Number(risk.replace(',', '.'));
-    if (!entryA || stop === undefined) return null;
-    return calculatePositionSizing({ capital: c, riskPercent: r, entryPrice: entryA.high, stopPrice: stop, targetPrice: tp2 ?? tp1 });
-  }, [capital, risk, entryA, stop, tp1, tp2]);
+    const c = Number(capital.replace(',', '.'));
+    const r = Number(risk.replace(',', '.'));
+    const maxAllocation = Number(maxPositionPercent.replace(',', '.'));
+    if (effectiveEntry === undefined || effectiveStop === undefined) return null;
+    return calculatePositionSizing({
+      capital: c,
+      riskPercent: r,
+      entryPrice: effectiveEntry,
+      stopPrice: effectiveStop,
+      targetPrice: tp2 ?? tp1,
+      maxPositionPercent: Number.isFinite(maxAllocation) ? maxAllocation : undefined,
+    });
+  }, [capital, risk, effectiveEntry, effectiveStop, tp1, tp2, maxPositionPercent]);
   const riskRewardScore = riskPlan?.riskReward === undefined ? 0 : Math.round(Math.max(0, Math.min(100, riskPlan.riskReward * 25)));
   const portfolioFit = useMemo(() => portfolioConnected && positions.length ? calculatePortfolioFit(positions, snapshot.symbol, 0) : null, [portfolioConnected, positions, snapshot.symbol]);
   const activePosition = useMemo(() => positions.find((p) => p.symbol.toUpperCase() === snapshot.symbol.toUpperCase() && p.quantity > 0), [positions, snapshot.symbol]);
@@ -325,7 +364,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       {metric('Sector', fundamentals?.sector ?? '—')}{metric('Industria', fundamentals?.industry ?? '—')}{metric('Benchmark', marketContext?.benchmarkSymbol ?? '—')}{metric('Benchmark tendencia', trendLabel(marketContext?.benchmarkTrend))}{metric('ETF sectorial', marketContext?.sectorSymbol ?? '—')}{metric('Sector tendencia', trendLabel(marketContext?.sectorTrend))}{metric('Market score', marketContext ? `${marketContext.score}/100` : '—')}
     </div><div className="researchBullets">{marketContext?.reasons.map((reason)=><p key={reason}>• {reason}</p>) ?? <p>• Contexto sectorial pendiente.</p>}</div></div>;
     if (researchTab === 'risks') return <div className="researchPanel"><h3>Riesgos</h3><div className="researchMetricGrid">
-      {metric('Beta', fmtRatio(fundamentals?.beta))}{metric('Margen neto', fmtPct(fundamentals?.profitMargin))}{metric('Margen operativo', fmtPct(fundamentals?.operatingMargin))}{metric('Stop / invalidación', stop?.toFixed(2) ?? '—')}{metric('Risk / Reward', rrText(riskPlan?.riskReward))}{metric('Riesgo máximo', `${risk}% del capital`)}
+      {metric('Beta', fmtRatio(fundamentals?.beta))}{metric('Margen neto', fmtPct(fundamentals?.profitMargin))}{metric('Margen operativo', fmtPct(fundamentals?.operatingMargin))}{metric('Stop aplicado', effectiveStop?.toFixed(2) ?? '—')}{metric('Risk / Reward', rrText(riskPlan?.riskReward))}{metric('Riesgo máximo', `${risk}% · exposición ${maxPositionPercent}%`)}
     </div><div className="researchBullets">{decisionResult.warnings.length ? decisionResult.warnings.map((warning)=><p key={warning}>• {warning}</p>) : <p>• El modelo no detecta advertencias extraordinarias adicionales.</p>}</div></div>;
     return <div className="researchGrid">
       <div className="thesisBlock"><h3>Tesis de inversión</h3><p>{decisionResult.reasons.length?decisionResult.reasons.join(' '):'La tesis se construirá con la siguiente actualización de datos técnicos y fundamentales.'}</p><div className="thesisCards"><div className="catalystCard"><h4>Catalizadores</h4>{marketContext?.reasons.slice(0,3).map((r)=><p key={r}>• {r}</p>) ?? <p>• Pendiente de contexto de mercado</p>}</div><div className="riskCard"><h4>Riesgos</h4>{decisionResult.warnings.length?decisionResult.warnings.slice(0,3).map((w)=><p key={w}>• {w}</p>):<p>• Sin advertencias extraordinarias del modelo</p>}</div></div></div>
@@ -346,7 +385,18 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
           <div className="tickerIdentity"><span className="tickerLogo">◉</span><div><b>{snapshot.symbol}</b><small>{fundamentals?.name ?? 'Activo seleccionado'}</small></div><button className={`watchToggle ${isWatched?'active':''}`} type="button" onClick={()=>toggleWatchlist()} aria-label={isWatched?'Quitar de Watchlist':'Agregar a Watchlist'}>{isWatched?'★':'☆'}</button></div>
           <label>Estrategia</label><div className="strategyGrid">{(Object.keys(STRATEGY_LABELS) as Strategy[]).map((item)=><button key={item} type="button" className={strategy===item?'selected':''} onClick={()=>onStrategyChange(item)}><span>{STRATEGY_LABELS[item].icon}</span><b>{STRATEGY_LABELS[item].title}</b><small>{STRATEGY_LABELS[item].subtitle}</small></button>)}</div>
           <div className="configPair"><label>Capital disponible (USD)<input inputMode="decimal" value={capital} onChange={(e)=>setCapital(e.target.value)}/></label><label>Riesgo por operación<input inputMode="decimal" value={risk} onChange={(e)=>setRisk(e.target.value)}/></label></div>
-          <div className="advancedHint">› Configuración avanzada</div><button className="analyzePrimary" type="submit" disabled={loading}>{loading?'Analizando…':'Analizar'}</button>{error?<p className="formError">{error}</p>:null}
+          <button className={`advancedHint ${advancedOpen?'open':''}`} type="button" onClick={()=>setAdvancedOpen((value)=>!value)}>› Configuración avanzada <span>{advancedOpen?'−':'+'}</span></button>
+          {advancedOpen?<div className="advancedPanel">
+            <div className="advancedField"><label>Entrada para sizing</label><select value={entryMode} onChange={(e)=>setEntryMode(e.target.value as EntryMode)}><option value="A">Zona A · conservadora</option><option value="B">Zona B · óptima</option><option value="custom">Precio personalizado</option></select></div>
+            {entryMode==='custom'?<div className="advancedField"><label>Precio de entrada manual</label><input inputMode="decimal" value={customEntry} onChange={(e)=>setCustomEntry(e.target.value)} placeholder={currentPrice.toFixed(2)}/></div>:null}
+            <div className="advancedField"><label>Stop para sizing</label><select value={stopMode} onChange={(e)=>setStopMode(e.target.value as StopMode)}><option value="technical">Stop técnico del modelo</option><option value="manual">Stop manual</option></select></div>
+            {stopMode==='manual'?<div className="advancedField"><label>Stop manual</label><input inputMode="decimal" value={manualStop} onChange={(e)=>setManualStop(e.target.value)} placeholder={stop?.toFixed(2) ?? '0.00'}/></div>:null}
+            <div className="advancedTwo"><div className="advancedField"><label>Máx. posición (%)</label><input inputMode="decimal" value={maxPositionPercent} onChange={(e)=>setMaxPositionPercent(e.target.value)}/></div><div className="advancedField"><label>Trailing ATR</label><input inputMode="decimal" value={trailingAtr} onChange={(e)=>setTrailingAtr(e.target.value)}/></div></div>
+            <div className="advancedTwo"><div className="advancedField"><label>Salida TP1 (%)</label><input inputMode="decimal" value={tp1Percent} onChange={(e)=>setTp1Percent(e.target.value)}/></div><div className="advancedField"><label>Salida TP2 (%)</label><input inputMode="decimal" value={tp2Percent} onChange={(e)=>setTp2Percent(e.target.value)}/></div></div>
+            <div className={`advancedSummary ${exitPlanValid?'':'invalid'}`}><span>Entrada <b>{effectiveEntry?.toFixed(2) ?? '—'}</b></span><span>Stop <b>{effectiveStop?.toFixed(2) ?? '—'}</b></span><span>Runner <b>{exitPlan.runner.toFixed(0)}%</b></span><span>Trailing <b>{exitPlan.trailing.toFixed(1)} ATR</b></span></div>
+            {!exitPlanValid?<p className="advancedError">TP1 + TP2 no puede superar 100% y el trailing ATR debe ser mayor a cero.</p>:null}
+          </div>:null}
+          <button className="analyzePrimary" type="submit" disabled={loading}>{loading?'Analizando…':'Analizar'}</button>{error?<p className="formError">{error}</p>:null}
         </form></section>
         <section className="surface positionSurface"><h2>Tu posición en IOL</h2>{activePosition?<><div className="positionSymbol"><span className="tickerLogo">◉</span><b>{activePosition.symbol} <small>({activePosition.assetType ?? 'IOL'})</small></b></div><dl>
           <div><dt>Cantidad</dt><dd>{activePosition.quantity}</dd></div><div><dt>Precio promedio</dt><dd>{fmtMoney(activePosition.averagePrice,activePosition.currency)}</dd></div><div><dt>Precio actual</dt><dd>{fmtMoney(positionUnitPrice,activePosition.currency)}</dd></div><div><dt>Ganancia / Pérdida</dt><dd className={(positionPnlPercent??0)>=0?'positive':'negative'}>{positionPnlPercent===undefined?'—':`${positionPnlPercent>=0?'+':''}${positionPnlPercent.toFixed(1)}%`}</dd></div><div><dt>Valor de la posición</dt><dd>{fmtMoney(activePosition.marketValue,activePosition.currency)}</dd></div><div><dt>Peso en la cartera</dt><dd>{portfolioFit?`${portfolioFit.currentWeightPercent.toFixed(1)}%`:'—'}</dd></div>
@@ -385,7 +435,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       <aside className="analystRight">
         <section className="surface decisionSurface"><div className="rightTitle"><h2>{snapshot.symbol} - Análisis Integral</h2><div className="rightTabs rightTabsFive">{TABS.map(([tab,label])=><button key={tab} className={analysisTab===tab?'active':''} onClick={()=>setAnalysisTab(tab)}>{label}</button>)}</div></div>
           <div className="decisionHero"><div><small>DECISIÓN</small><h1>{decisionResult.headline}</h1><h3>{decisionSecondary}</h3></div><div className="gauge" style={{background:`conic-gradient(#3ee1a5 0 ${scoreCard.conviction}%, #143245 ${scoreCard.conviction}% 100%)`}}><div><b>{scoreCard.conviction}</b><small>/100</small></div></div><p>{tabText()}</p></div>
-          {analysisTab==='news'?<div className="insightsPanel"><div className="sectionHead"><h3>Noticias verificadas · Español</h3><button onClick={()=>void loadNews()} disabled={insightsLoading==='news'}>{insightsLoading==='news'?'Traduciendo…':'Cargar noticias'}</button></div>{insightsError?<p className="formError">{insightsError}</p>:null}{news===null?<p className="mutedText">Carga manual y traducción automática al español para preservar el cupo de proveedores.</p>:news.length?news.slice(0,6).map((item)=><a className="newsItem" href={item.url} target="_blank" rel="noreferrer" title={item.originalTitle ? `Original: ${item.originalTitle}` : item.title} key={`${item.url}-${item.title}`}><b>{item.title}</b><span>{item.source ?? 'Fuente'} · {dateLabel(item.publishedAt)} · {item.translationLanguage==='es'?'traducido al español':'idioma original'} · {item.sentiment ?? 'sin sentimiento'}</span></a>):<p className="mutedText">No se encontraron noticias recientes para este ticker.</p>}</div>:analysisTab==='fundamental'?<FundamentalPanel fundamentals={fundamentals} score={fundamentalScore} source={fundamentalSource}/>:<><div className="scoreTiles"><div><span>Técnico</span><b>{technicalScore}</b></div><div><span>Fundamental</span><b>{fundamentalScore?.total ?? '—'}</b></div><div><span>Valuación</span><b>{fundamentalScore?.valuation ?? '—'}</b></div><div><span>Mercado</span><b>{marketContext?.score ?? '—'}</b></div><div><span>Riesgo</span><b>{riskRewardScore}</b></div></div><div className="rightColumns"><div className="levelsCard"><h3>Niveles Clave (USD - subyacente)</h3><dl><div><dt>Precio actual</dt><dd>{currentPrice.toFixed(2)}</dd></div><div><dt>Zona de entrada A</dt><dd>{zoneText(entryA)}</dd></div><div><dt>Zona de entrada B</dt><dd>{zoneText(entryB)}</dd></div><div className="danger"><dt>Stop / Invalidación</dt><dd>{stop?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP1</dt><dd>{tp1?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP2</dt><dd>{tp2?.toFixed(2) ?? '—'}</dd></div></dl></div><div className="managementCard"><h3>Gestión de posición</h3>{riskPlan?<dl><div><dt>Riesgo por unidad</dt><dd>{fmtMoney(riskPlan.riskPerUnit)}</dd></div><div><dt>Tamaño máximo</dt><dd>{riskPlan.quantity} acciones</dd></div><div><dt>Riesgo total</dt><dd>{fmtMoney(riskPlan.riskBudget)}</dd></div><div><dt>Risk / Reward</dt><dd>{rrText(riskPlan.riskReward)}</dd></div></dl>:<p className="mutedText">Se calculará al disponer de entrada y stop.</p>}<h4>Estrategia de salida</h4><p>• 25% en TP1<br/>• 25% en TP2<br/>• 50% runner con trailing estructural</p></div></div></>}
+          {analysisTab==='news'?<div className="insightsPanel"><div className="sectionHead"><h3>Noticias verificadas · Español</h3><button onClick={()=>void loadNews()} disabled={insightsLoading==='news'}>{insightsLoading==='news'?'Traduciendo…':'Cargar noticias'}</button></div>{insightsError?<p className="formError">{insightsError}</p>:null}{news===null?<p className="mutedText">Carga manual y traducción automática al español para preservar el cupo de proveedores.</p>:news.length?news.slice(0,6).map((item)=><a className="newsItem" href={item.url} target="_blank" rel="noreferrer" title={item.originalTitle ? `Original: ${item.originalTitle}` : item.title} key={`${item.url}-${item.title}`}><b>{item.title}</b><span>{item.source ?? 'Fuente'} · {dateLabel(item.publishedAt)} · {item.translationLanguage==='es'?'traducido al español':'idioma original'} · {item.sentiment ?? 'sin sentimiento'}</span></a>):<p className="mutedText">No se encontraron noticias recientes para este ticker.</p>}</div>:analysisTab==='fundamental'?<FundamentalPanel fundamentals={fundamentals} score={fundamentalScore} source={fundamentalSource}/>:<><div className="scoreTiles"><div><span>Técnico</span><b>{technicalScore}</b></div><div><span>Fundamental</span><b>{fundamentalScore?.total ?? '—'}</b></div><div><span>Valuación</span><b>{fundamentalScore?.valuation ?? '—'}</b></div><div><span>Mercado</span><b>{marketContext?.score ?? '—'}</b></div><div><span>Riesgo</span><b>{riskRewardScore}</b></div></div><div className="rightColumns"><div className="levelsCard"><h3>Niveles Clave (USD - subyacente)</h3><dl><div><dt>Precio actual</dt><dd>{currentPrice.toFixed(2)}</dd></div><div><dt>Zona de entrada A</dt><dd>{zoneText(entryA)}</dd></div><div><dt>Zona de entrada B</dt><dd>{zoneText(entryB)}</dd></div><div className="danger"><dt>Stop / Invalidación</dt><dd>{stop?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP1</dt><dd>{tp1?.toFixed(2) ?? '—'}</dd></div><div className="good"><dt>TP2</dt><dd>{tp2?.toFixed(2) ?? '—'}</dd></div></dl></div><div className="managementCard"><h3>Gestión de posición</h3>{riskPlan?<dl><div><dt>Entrada aplicada</dt><dd>{effectiveEntry?.toFixed(2) ?? '—'}</dd></div><div><dt>Stop aplicado</dt><dd>{effectiveStop?.toFixed(2) ?? '—'}</dd></div><div><dt>Riesgo por unidad</dt><dd>{fmtMoney(riskPlan.riskPerUnit)}</dd></div><div><dt>Tamaño máximo</dt><dd>{riskPlan.quantity} acciones</dd></div><div><dt>Valor posición</dt><dd>{fmtMoney(riskPlan.positionValue)}</dd></div><div><dt>Uso de capital</dt><dd>{riskPlan.capitalUtilizationPercent.toFixed(1)}%</dd></div><div><dt>Riesgo total</dt><dd>{fmtMoney(riskPlan.riskBudget)}</dd></div><div><dt>Risk / Reward</dt><dd>{rrText(riskPlan.riskReward)}</dd></div></dl>:<p className="mutedText">Revisá entrada, stop y límites en Configuración avanzada.</p>}<h4>Estrategia de salida</h4><p>• {exitPlan.tp1.toFixed(0)}% en TP1<br/>• {exitPlan.tp2.toFixed(0)}% en TP2<br/>• {exitPlan.runner.toFixed(0)}% runner con trailing {exitPlan.trailing.toFixed(1)} ATR</p></div></div></>}
         </section>
         <section className="surface marketSurface"><div className="sectionHead"><h2>Contexto de Mercado</h2><Link href="/market">Abrir mercado</Link></div>{marketContext?<><div className="marketRow"><span>◎ {marketContext.benchmarkSymbol}</span><b>{trendLabel(marketContext.benchmarkTrend)}</b><small>Score {marketContext.score}</small></div><div className="marketRow"><span>◎ {marketContext.sectorSymbol ?? 'Sector'}</span><b>{trendLabel(marketContext.sectorTrend)}</b><small>Contexto sectorial</small></div>{marketContext.reasons.slice(0,3).map((r)=><div className="marketReason" key={r}>• {r}</div>)}</>:<p className="mutedText">Contexto pendiente de datos reales.</p>}</section>
         <section className="surface eventsSurface"><div className="sectionHead"><h2>Próximos eventos</h2><button onClick={()=>void loadEvents()} disabled={insightsLoading==='events'}>{insightsLoading==='events'?'Cargando…':'Cargar'}</button></div>{insightsError?<p className="formError">{insightsError}</p>:null}{events===null?<div className="eventPlaceholder"><b>Resultados · dividendos · Investor Day</b><small>Consulta manual para preservar el cupo del proveedor.</small></div>:events.length?events.slice(0,4).map((event)=><div className="eventRow" key={`${event.symbol}-${event.reportDate}`}><b>Resultados</b><span>{dateLabel(event.reportDate)}</span><small>{event.name ?? event.symbol}</small></div>):<div className="eventPlaceholder"><b>Sin eventos encontrados</b><small>No hay resultados programados informados por el proveedor.</small></div>}</section>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { TechnicalChart } from '@/app/components/TechnicalChart';
 import type { FundamentalScore, FundamentalSnapshot } from '@/core/domain/fundamentals';
 import type { MarketContextSnapshot } from '@/core/domain/market-context';
@@ -27,6 +27,7 @@ interface EventsResponse { items?: EarningsEvent[]; error?: string; source?: str
 type AnalysisTab = 'summary' | 'technical' | 'fundamental' | 'risk' | 'news';
 type ResearchTab = 'summary' | 'fundamental' | 'valuation' | 'expectations' | 'sector' | 'risks';
 type ChartRange = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1A' | '5A' | 'Todos';
+type QuickTab = 'portfolio' | 'watchlist';
 
 const STRATEGY_TIMEFRAMES: Record<Strategy, Timeframe[]> = {
   day: ['1m', '5m', '15m', '1h'], swing: ['1h', '4h', '1d', '1w'], position: ['1d', '1w', '1M'],
@@ -119,6 +120,9 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const [timeframe, setTimeframe] = useState<Timeframe>(initialSnapshot.timeframe);
   const [chartRange, setChartRange] = useState<ChartRange>('Todos');
   const [researchTab, setResearchTab] = useState<ResearchTab>('summary');
+  const [quickTab, setQuickTab] = useState<QuickTab>('portfolio');
+  const [watchlist, setWatchlist] = useState<string[]>([]);
+  const [watchlistReady, setWatchlistReady] = useState(false);
   const [capital, setCapital] = useState('5000');
   const [risk, setRisk] = useState('1.0');
   const [bars, setBars] = useState(initialBars);
@@ -166,6 +170,27 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const decisionSecondary = decisionResult.headline === 'MANTENER' && entryA ? 'AUMENTAR EN PULLBACK' : decisionResult.headline;
   const quickPositions = useMemo(() => [...positions].filter((p) => p.quantity > 0).sort((a,b) => (b.marketValue ?? 0) - (a.marketValue ?? 0)).slice(0,7), [positions]);
   const targetUpside = fundamentals?.analystTargetPrice && currentPrice ? fundamentals.analystTargetPrice / currentPrice - 1 : undefined;
+  const isWatched = watchlist.includes(snapshot.symbol.toUpperCase());
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem('senior-trading-analyst:watchlist');
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) setWatchlist(parsed.filter((item): item is string => typeof item === 'string').map((item) => item.toUpperCase()).slice(0, 30));
+    } catch {}
+    setWatchlistReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!watchlistReady) return;
+    window.localStorage.setItem('senior-trading-analyst:watchlist', JSON.stringify(watchlist));
+  }, [watchlist, watchlistReady]);
+
+  function toggleWatchlist(symbolToToggle = snapshot.symbol) {
+    const clean = symbolToToggle.trim().toUpperCase();
+    if (!clean) return;
+    setWatchlist((current) => current.includes(clean) ? current.filter((item) => item !== clean) : [clean, ...current].slice(0, 30));
+  }
 
   function onStrategyChange(next: Strategy) {
     setStrategy(next); const allowed = STRATEGY_TIMEFRAMES[next]; if (!allowed.includes(timeframe)) setTimeframe(allowed[0]);
@@ -265,7 +290,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       <aside className="analystSidebar">
         <section className="surface configSurface"><h2>1. Configuración</h2><form onSubmit={handleAnalyze}>
           <label>Ticker<div className="tickerInput"><input value={symbol} onChange={(e)=>setSymbol(e.target.value.toUpperCase())} maxLength={20}/><span>⌕</span></div></label>
-          <div className="tickerIdentity"><span className="tickerLogo">◉</span><div><b>{snapshot.symbol}</b><small>{fundamentals?.name ?? 'Activo seleccionado'}</small></div></div>
+          <div className="tickerIdentity"><span className="tickerLogo">◉</span><div><b>{snapshot.symbol}</b><small>{fundamentals?.name ?? 'Activo seleccionado'}</small></div><button className={`watchToggle ${isWatched?'active':''}`} type="button" onClick={()=>toggleWatchlist()} aria-label={isWatched?'Quitar de Watchlist':'Agregar a Watchlist'}>{isWatched?'★':'☆'}</button></div>
           <label>Estrategia</label><div className="strategyGrid">{(Object.keys(STRATEGY_LABELS) as Strategy[]).map((item)=><button key={item} type="button" className={strategy===item?'selected':''} onClick={()=>onStrategyChange(item)}><span>{STRATEGY_LABELS[item].icon}</span><b>{STRATEGY_LABELS[item].title}</b><small>{STRATEGY_LABELS[item].subtitle}</small></button>)}</div>
           <div className="configPair"><label>Capital disponible (USD)<input inputMode="decimal" value={capital} onChange={(e)=>setCapital(e.target.value)}/></label><label>Riesgo por operación<input inputMode="decimal" value={risk} onChange={(e)=>setRisk(e.target.value)}/></label></div>
           <div className="advancedHint">› Configuración avanzada</div><button className="analyzePrimary" type="submit" disabled={loading}>{loading?'Analizando…':'Analizar'}</button>{error?<p className="formError">{error}</p>:null}
@@ -273,7 +298,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
         <section className="surface positionSurface"><h2>Tu posición en IOL</h2>{activePosition?<><div className="positionSymbol"><span className="tickerLogo">◉</span><b>{activePosition.symbol} <small>({activePosition.assetType ?? 'IOL'})</small></b></div><dl>
           <div><dt>Cantidad</dt><dd>{activePosition.quantity}</dd></div><div><dt>Precio promedio</dt><dd>{fmtMoney(activePosition.averagePrice,activePosition.currency)}</dd></div><div><dt>Precio actual</dt><dd>{fmtMoney(positionUnitPrice,activePosition.currency)}</dd></div><div><dt>Ganancia / Pérdida</dt><dd className={(positionPnlPercent??0)>=0?'positive':'negative'}>{positionPnlPercent===undefined?'—':`${positionPnlPercent>=0?'+':''}${positionPnlPercent.toFixed(1)}%`}</dd></div><div><dt>Valor de la posición</dt><dd>{fmtMoney(activePosition.marketValue,activePosition.currency)}</dd></div><div><dt>Peso en la cartera</dt><dd>{portfolioFit?`${portfolioFit.currentWeightPercent.toFixed(1)}%`:'—'}</dd></div>
         </dl><div className="positionActions"><a href="https://www.invertironline.com" target="_blank" rel="noreferrer">Ver en IOL</a><Link href="/sandbox">Operar</Link></div></>:<p className="mutedText">{portfolioConnected?'El ticker no forma parte de tu cartera actual.':'La cartera IOL se carga al ejecutar el análisis.'}</p>}</section>
-        <section className="surface quickSurface"><h2>Lista rápida</h2><div className="quickTabs"><button className="active">Mis tickers</button><button>Watchlist</button></div>{quickPositions.length?quickPositions.map((p)=><button className={`quickTicker ${snapshot.symbol.toUpperCase()===p.symbol.toUpperCase()?'selected':''}`} key={p.symbol} type="button" disabled={loading} onClick={()=>void runFullAnalysis(p.symbol)}><span>◉</span><b>{p.symbol}</b><small>{totalPortfolioValue>0&&p.marketValue?`${((p.marketValue/totalPortfolioValue)*100).toFixed(1)}% cartera`:`${p.quantity} u.`}</small></button>):<p className="mutedText">Analizá un ticker para cargar posiciones IOL.</p>}</section>
+        <section className="surface quickSurface"><h2>Lista rápida</h2><div className="quickTabs"><button className={quickTab==='portfolio'?'active':''} onClick={()=>setQuickTab('portfolio')}>Mis tickers</button><button className={quickTab==='watchlist'?'active':''} onClick={()=>setQuickTab('watchlist')}>Watchlist</button></div>{quickTab==='portfolio'?(quickPositions.length?quickPositions.map((p)=><button className={`quickTicker ${snapshot.symbol.toUpperCase()===p.symbol.toUpperCase()?'selected':''}`} key={p.symbol} type="button" disabled={loading} onClick={()=>void runFullAnalysis(p.symbol)}><span>◉</span><b>{p.symbol}</b><small>{totalPortfolioValue>0&&p.marketValue?`${((p.marketValue/totalPortfolioValue)*100).toFixed(1)}% cartera`:`${p.quantity} u.`}</small></button>):<p className="mutedText">Analizá un ticker para cargar posiciones IOL.</p>):(watchlist.length?<div className="watchlistRows">{watchlist.map((ticker)=><div className={`watchlistRow ${snapshot.symbol.toUpperCase()===ticker?'selected':''}`} key={ticker}><button type="button" disabled={loading} onClick={()=>void runFullAnalysis(ticker)}><span>☆</span><b>{ticker}</b><small>Analizar</small></button><button className="watchRemove" type="button" onClick={()=>toggleWatchlist(ticker)} aria-label={`Quitar ${ticker} de Watchlist`}>×</button></div>)}</div>):<p className="mutedText">Agregá tickers con la estrella ☆ junto al activo analizado.</p>)}</section>
       </aside>
       <section className="analystCenter">
         <section className="surface chartSurface"><div className="chartToolbar"><div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item)=><button key={item} className={timeframe===item?'active':''} disabled={loading} onClick={()=>void changeTimeframe(item)}>{item==='1d'?'D':item==='1w'?'S':item==='1M'?'M':item}</button>)}</div><div className="chartTools"><span>⌁ Indicadores</span><span>⌁ Dibujos</span><span>◉ Comparar</span><span>⚙</span><span>⛶</span></div></div>

@@ -6,6 +6,7 @@ import { calculateScores } from '@/core/engines/scoring';
 import { calculateTechnicalScore } from '@/core/engines/technical-score';
 import type { FundamentalScore } from '@/core/domain/fundamentals';
 import type { MarketContextSnapshot } from '@/core/domain/market-context';
+import { getStrategyRiskPreset } from '@/core/config/strategy-risk-presets';
 
 function lineValue(snapshot: TechnicalSnapshot, id: string): number | undefined {
   const overlay = snapshot.overlays.find(
@@ -32,12 +33,14 @@ export function buildTradePlan(input: BuildTradePlanInput): TradePlan {
   const technical = calculateTechnicalScore(snapshot);
   const entryA = zoneValue(snapshot, 'entry-a');
   const entryB = zoneValue(snapshot, 'entry-b');
+  const preset = getStrategyRiskPreset(strategy);
+  const preferredEntry = preset.entryMode === 'B' ? entryB : entryA;
   const stop = lineValue(snapshot, 'stop');
   const targets = [lineValue(snapshot, 'tp1'), lineValue(snapshot, 'tp2')]
     .filter((target): target is number => target !== undefined);
 
-  const risk = entryA && stop !== undefined ? entryA.high - stop : undefined;
-  const reward = entryA && targets[0] !== undefined ? targets[0] - entryA.high : undefined;
+  const risk = preferredEntry && stop !== undefined ? preferredEntry.high - stop : undefined;
+  const reward = preferredEntry && targets[0] !== undefined ? targets[0] - preferredEntry.high : undefined;
   const riskReward = risk !== undefined && reward !== undefined && risk > 0 ? reward / risk : undefined;
   const riskRewardScore = riskReward === undefined ? 50 : Math.round(Math.max(0, Math.min(100, riskReward * 25)));
 
@@ -71,6 +74,16 @@ export function buildTradePlan(input: BuildTradePlanInput): TradePlan {
     stop,
     targets,
     riskReward,
+    riskProfile: {
+      label: preset.label,
+      riskPercent: preset.riskPercent,
+      maxPositionPercent: preset.maxPositionPercent,
+      trailingAtr: preset.trailingAtr,
+      tp1Percent: preset.tp1Percent,
+      tp2Percent: preset.tp2Percent,
+      runnerPercent: Math.max(0, 100 - preset.tp1Percent - preset.tp2Percent),
+      preferredEntry: preset.entryMode,
+    },
     thesis: decision.reasons,
     risks: decision.warnings,
     invalidationConditions: [

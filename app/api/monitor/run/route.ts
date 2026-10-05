@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
 import { getAlertStateStore } from '@/core/monitoring/state-store';
+import { getAlertPreferences, shouldNotifyAlert } from '@/core/monitoring/preferences';
 import { getNotificationProviders } from '@/core/providers/notifications';
 
 const zoneSchema = z.object({ low: z.number(), high: z.number() });
@@ -59,7 +60,8 @@ export async function POST(request: Request) {
     const { plans } = requestSchema.parse(await request.json());
     const providers = getNotificationProviders();
     const stateStore = getAlertStateStore();
-    const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds());
+    const { preferences: alertPreferences, persistent: persistentAlertPreferences } = await getAlertPreferences().catch(() => ({ preferences: undefined, persistent: false }));
+    const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds(), alertPreferences ? ((plan, event) => shouldNotifyAlert(plan, event, alertPreferences)) : undefined);
     const events = [];
 
     for (const plan of plans) {
@@ -71,6 +73,8 @@ export async function POST(request: Request) {
       processedPlans: plans.length,
       notificationProviders: providers.map((provider) => provider.id),
       persistentDeduplication: Boolean(stateStore),
+      persistentAlertPreferences,
+      alertPreferences,
       events,
     });
   } catch (error) {

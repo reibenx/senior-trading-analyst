@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getInsightsProvider } from '@/core/providers/alpha-vantage-insights';
+import { translateNewsToSpanish } from '@/core/services/news-translation';
 
 const querySchema = z.object({ symbol: z.string().trim().min(1).max(20).transform((value) => value.toUpperCase()) });
 
@@ -12,8 +13,16 @@ export async function GET(request: Request) {
   if (!provider) return NextResponse.json({ error: 'Proveedor de noticias no configurado.' }, { status: 503 });
 
   try {
-    const items = await provider.getNews(parsed.data.symbol);
-    return NextResponse.json({ source: provider.id, symbol: parsed.data.symbol, items, cachedForHours: Number(process.env.ALPHA_VANTAGE_NEWS_CACHE_TTL_HOURS ?? '6') });
+    const rawItems = await provider.getNews(parsed.data.symbol);
+    const items = await translateNewsToSpanish(rawItems, 6);
+    return NextResponse.json({
+      source: provider.id,
+      symbol: parsed.data.symbol,
+      items,
+      language: 'es',
+      translation: 'MyMemory',
+      cachedForHours: Number(process.env.ALPHA_VANTAGE_NEWS_CACHE_TTL_HOURS ?? '6'),
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'No fue posible obtener noticias.' }, { status: 502 });
   }

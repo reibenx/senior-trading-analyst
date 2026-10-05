@@ -20,6 +20,7 @@ interface AnalyzeResponse {
   fundamentals?: FundamentalSnapshot | null; fundamentalScore?: FundamentalScore | null;
   fundamentalSource?: string | null; marketContext?: MarketContextSnapshot | null; error?: string;
 }
+interface TechnicalResponse { source?: string; bars?: OHLCVBar[]; snapshot?: TechnicalSnapshot; error?: string }
 interface PortfolioResponse { connected: boolean; broker: string | null; positions: Position[]; error?: string }
 interface NewsResponse { items?: NewsInsight[]; error?: string; source?: string }
 interface EventsResponse { items?: EarningsEvent[]; error?: string; source?: string }
@@ -138,6 +139,23 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
     finally { setLoading(false); }
   }
 
+  async function changeTimeframe(next: Timeframe) {
+    if (next === timeframe || loading) return;
+    setTimeframe(next); setLoading(true); setError(null);
+    try {
+      const response = await fetch('/api/analyze/technical', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: snapshot.symbol, timeframe: next }),
+      });
+      const result = await response.json() as TechnicalResponse;
+      if (!response.ok || !result.snapshot || !result.bars) throw new Error(result.error ?? 'No fue posible actualizar el timeframe.');
+      setBars(result.bars); setSnapshot(result.snapshot); setSource(result.source ?? source);
+    } catch (e) {
+      setTimeframe(snapshot.timeframe);
+      setError(e instanceof Error ? e.message : 'Error al actualizar el timeframe.');
+    } finally { setLoading(false); }
+  }
+
   async function loadNews() {
     setInsightsLoading('news'); setInsightsError(null);
     try {
@@ -195,7 +213,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       </aside>
 
       <section className="analystCenter">
-        <section className="surface chartSurface"><div className="chartToolbar"><div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item)=><button key={item} className={timeframe===item?'active':''} onClick={()=>setTimeframe(item)}>{item==='1d'?'D':item==='1w'?'S':item==='1M'?'M':item}</button>)}</div><div className="chartTools"><span>⌁ Indicadores</span><span>⌁ Dibujos</span><span>◉ Comparar</span><span>⚙</span><span>⛶</span></div></div>
+        <section className="surface chartSurface"><div className="chartToolbar"><div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item)=><button key={item} className={timeframe===item?'active':''} disabled={loading} onClick={()=>void changeTimeframe(item)}>{item==='1d'?'D':item==='1w'?'S':item==='1M'?'M':item}</button>)}</div><div className="chartTools"><span>⌁ Indicadores</span><span>⌁ Dibujos</span><span>◉ Comparar</span><span>⚙</span><span>⛶</span></div></div>
           <div className="instrumentStrip"><div><span className="tickerLogo">◉</span><b>{fundamentals?.name ?? snapshot.symbol}</b><small> · {snapshot.timeframe.toUpperCase()} · {fundamentals?.sector ?? 'Mercado'}</small></div><div className="priceStrip"><b>{currentPrice.toFixed(2)}</b><span>{snapshot.trend==='BULL'?'Tendencia alcista':snapshot.trend==='BEAR'?'Tendencia bajista':'Tendencia neutral'}</span></div></div>
           <TechnicalChart bars={bars} snapshot={snapshot}/><div className="chartFooter"><span>1D</span><span>5D</span><span>1M</span><span>3M</span><span>6M</span><span>YTD</span><span>1A</span><span>5A</span><span>Todos</span><small>{source==='demo-fixture'?'DEMO':source}</small></div>
         </section>

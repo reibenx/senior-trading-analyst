@@ -4,6 +4,7 @@ import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
 import { getAlertStateStore } from '@/core/monitoring/state-store';
+import { getAlertPreferences, shouldNotifyAlert } from '@/core/monitoring/preferences';
 import { circularSlice, getMonitorCursorStore } from '@/core/monitoring/scan-cursor';
 import { getBrokerAdapter } from '@/core/providers/iol-bridge';
 import { getMarketDataProvider } from '@/core/providers/market-provider';
@@ -93,7 +94,8 @@ export async function POST(request: Request) {
 
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();
-  const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds());
+  const { preferences: alertPreferences, persistent: persistentAlertPreferences } = await getAlertPreferences().catch(() => ({ preferences: undefined, persistent: false }));
+  const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds(), alertPreferences ? ((plan, event) => shouldNotifyAlert(plan, event, alertPreferences)) : undefined);
   const results: Array<Record<string, unknown>> = [];
 
   for (const target of scanTargets) {
@@ -141,6 +143,8 @@ export async function POST(request: Request) {
     portfolioPositions: positions.length,
     notificationProviders: providers.map((provider) => provider.id),
     persistentDeduplication: Boolean(stateStore),
+    persistentAlertPreferences,
+    alertPreferences,
     results,
   });
 }

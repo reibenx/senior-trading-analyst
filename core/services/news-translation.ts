@@ -58,7 +58,13 @@ export async function translateNewsToSpanish(items: NewsInsight[], limit = 6): P
   const translated = await Promise.all(items.slice(0, capped).map(async (item) => {
     try {
       const translatedTitle = await translateTextToSpanish(item.title);
-      return { ...item, translatedTitle, translationLanguage: 'es' as const };
+      return {
+        ...item,
+        originalTitle: item.title,
+        title: translatedTitle,
+        translatedTitle,
+        translationLanguage: 'es' as const,
+      };
     } catch {
       return item;
     }

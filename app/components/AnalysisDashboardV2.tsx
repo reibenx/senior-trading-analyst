@@ -13,6 +13,7 @@ import { calculatePortfolioFit } from '@/core/engines/portfolio-fit';
 import { calculatePositionSizing } from '@/core/engines/risk';
 import { calculateScores } from '@/core/engines/scoring';
 import { calculateTechnicalScore } from '@/core/engines/technical-score';
+import { getStrategyRiskPreset } from '@/core/config/strategy-risk-presets';
 
 interface Props { initialBars: OHLCVBar[]; initialSnapshot: TechnicalSnapshot }
 interface AnalyzeResponse {
@@ -136,6 +137,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const [watchlistReady, setWatchlistReady] = useState(false);
   const [capital, setCapital] = useState('5000');
   const [risk, setRisk] = useState('1.0');
+  const [presetLabel, setPresetLabel] = useState(getStrategyRiskPreset('swing').label);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [entryMode, setEntryMode] = useState<EntryMode>('A');
   const [customEntry, setCustomEntry] = useState('');
@@ -284,7 +286,20 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   }
 
   function onStrategyChange(next: Strategy) {
-    setStrategy(next); const allowed = STRATEGY_TIMEFRAMES[next]; if (!allowed.includes(timeframe)) setTimeframe(allowed[0]);
+    const preset = getStrategyRiskPreset(next);
+    setStrategy(next);
+    const allowed = STRATEGY_TIMEFRAMES[next];
+    if (!allowed.includes(timeframe)) setTimeframe(allowed[0]);
+    setRisk(String(preset.riskPercent));
+    setMaxPositionPercent(String(preset.maxPositionPercent));
+    setTrailingAtr(String(preset.trailingAtr));
+    setTp1Percent(String(preset.tp1Percent));
+    setTp2Percent(String(preset.tp2Percent));
+    setEntryMode(preset.entryMode);
+    setStopMode(preset.stopMode);
+    setCustomEntry('');
+    setManualStop('');
+    setPresetLabel(preset.label);
   }
 
   async function runFullAnalysis(requestedSymbol: string) {
@@ -393,7 +408,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
             {stopMode==='manual'?<div className="advancedField"><label>Stop manual</label><input inputMode="decimal" value={manualStop} onChange={(e)=>setManualStop(e.target.value)} placeholder={stop?.toFixed(2) ?? '0.00'}/></div>:null}
             <div className="advancedTwo"><div className="advancedField"><label>Máx. posición (%)</label><input inputMode="decimal" value={maxPositionPercent} onChange={(e)=>setMaxPositionPercent(e.target.value)}/></div><div className="advancedField"><label>Trailing ATR</label><input inputMode="decimal" value={trailingAtr} onChange={(e)=>setTrailingAtr(e.target.value)}/></div></div>
             <div className="advancedTwo"><div className="advancedField"><label>Salida TP1 (%)</label><input inputMode="decimal" value={tp1Percent} onChange={(e)=>setTp1Percent(e.target.value)}/></div><div className="advancedField"><label>Salida TP2 (%)</label><input inputMode="decimal" value={tp2Percent} onChange={(e)=>setTp2Percent(e.target.value)}/></div></div>
-            <div className={`advancedSummary ${exitPlanValid?'':'invalid'}`}><span>Entrada <b>{effectiveEntry?.toFixed(2) ?? '—'}</b></span><span>Stop <b>{effectiveStop?.toFixed(2) ?? '—'}</b></span><span>Runner <b>{exitPlan.runner.toFixed(0)}%</b></span><span>Trailing <b>{exitPlan.trailing.toFixed(1)} ATR</b></span></div>
+            <div className="presetBanner"><span>Perfil activo</span><b>{presetLabel}</b><small>Los valores pueden editarse manualmente después de aplicar el preset.</small></div><div className={`advancedSummary ${exitPlanValid?'':'invalid'}`}><span>Entrada <b>{effectiveEntry?.toFixed(2) ?? '—'}</b></span><span>Stop <b>{effectiveStop?.toFixed(2) ?? '—'}</b></span><span>Runner <b>{exitPlan.runner.toFixed(0)}%</b></span><span>Trailing <b>{exitPlan.trailing.toFixed(1)} ATR</b></span></div>
             {!exitPlanValid?<p className="advancedError">TP1 + TP2 no puede superar 100% y el trailing ATR debe ser mayor a cero.</p>:null}
           </div>:null}
           <button className="analyzePrimary" type="submit" disabled={loading}>{loading?'Analizando…':'Analizar'}</button>{error?<p className="formError">{error}</p>:null}

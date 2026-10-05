@@ -1,5 +1,6 @@
 export interface NewsInsight {
   title: string;
+  originalTitle?: string;
   translatedTitle?: string;
   translationLanguage?: 'es';
   url: string;

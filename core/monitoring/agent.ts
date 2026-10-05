@@ -14,6 +14,7 @@ export class MonitoringAgent {
     private readonly notifications: NotificationProvider[],
     private readonly stateStore?: AlertStateStore | null,
     private readonly dedupTtlSeconds = 86400,
+    private readonly shouldNotify?: (plan: TradePlan, event: AlertEvent) => boolean,
   ) {}
 
   async evaluate(plan: TradePlan): Promise<AlertEvent[]> {
@@ -23,6 +24,8 @@ export class MonitoringAgent {
     const events: AlertEvent[] = [];
 
     for (const event of candidates) {
+      if (this.shouldNotify && !this.shouldNotify(plan, event)) continue;
+
       if (this.stateStore) {
         const acquired = await this.stateStore.acquire(event, this.dedupTtlSeconds);
         if (!acquired) continue;

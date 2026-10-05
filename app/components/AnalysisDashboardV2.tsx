@@ -28,6 +28,7 @@ type AnalysisTab = 'summary' | 'technical' | 'fundamental' | 'risk' | 'news';
 type ResearchTab = 'summary' | 'fundamental' | 'valuation' | 'expectations' | 'sector' | 'risks';
 type ChartRange = '1D' | '5D' | '1M' | '3M' | '6M' | 'YTD' | '1A' | '5A' | 'Todos';
 type QuickTab = 'portfolio' | 'watchlist';
+type ChartToolPanel = 'drawings' | 'compare' | null;
 
 const STRATEGY_TIMEFRAMES: Record<Strategy, Timeframe[]> = {
   day: ['1m', '5m', '15m', '1h'], swing: ['1h', '4h', '1d', '1w'], position: ['1d', '1w', '1M'],
@@ -121,6 +122,14 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   const [chartRange, setChartRange] = useState<ChartRange>('Todos');
   const [researchTab, setResearchTab] = useState<ResearchTab>('summary');
   const [quickTab, setQuickTab] = useState<QuickTab>('portfolio');
+  const [chartToolPanel, setChartToolPanel] = useState<ChartToolPanel>(null);
+  const [manualLevelInput, setManualLevelInput] = useState('');
+  const [manualLevels, setManualLevels] = useState<number[]>([]);
+  const [compareInput, setCompareInput] = useState('SPY');
+  const [comparisonSymbol, setComparisonSymbol] = useState<string | null>(null);
+  const [comparisonBars, setComparisonBars] = useState<OHLCVBar[]>([]);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [watchlistReady, setWatchlistReady] = useState(false);
   const [capital, setCapital] = useState('5000');
@@ -192,6 +201,49 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
     setWatchlist((current) => current.includes(clean) ? current.filter((item) => item !== clean) : [clean, ...current].slice(0, 30));
   }
 
+  function addManualLevel() {
+    const value = Number(manualLevelInput.replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0) {
+      setError('Ingresá un nivel de precio válido.');
+      return;
+    }
+    setManualLevels((current) => current.some((item) => Math.abs(item - value) < 0.0001) ? current : [...current, value].slice(-12));
+    setManualLevelInput('');
+    setError(null);
+  }
+
+  async function loadComparison(requestedSymbol = compareInput, tf: Timeframe = timeframe) {
+    const clean = requestedSymbol.trim().toUpperCase();
+    if (!clean || clean === snapshot.symbol.toUpperCase()) {
+      setComparisonError(clean === snapshot.symbol.toUpperCase() ? 'Elegí un ticker distinto del activo principal.' : 'Ingresá un ticker para comparar.');
+      return;
+    }
+    setCompareInput(clean);
+    setComparisonLoading(true);
+    setComparisonError(null);
+    try {
+      const response = await fetch('/api/analyze/technical', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: clean, timeframe: tf }),
+      });
+      const result = await response.json() as TechnicalResponse;
+      if (!response.ok || !result.bars) throw new Error(result.error ?? 'No fue posible cargar la comparación.');
+      setComparisonSymbol(clean);
+      setComparisonBars(result.bars);
+    } catch (e) {
+      setComparisonError(e instanceof Error ? e.message : 'Error al cargar la comparación.');
+    } finally {
+      setComparisonLoading(false);
+    }
+  }
+
+  function clearComparison() {
+    setComparisonSymbol(null);
+    setComparisonBars([]);
+    setComparisonError(null);
+  }
+
   function onStrategyChange(next: Strategy) {
     setStrategy(next); const allowed = STRATEGY_TIMEFRAMES[next]; if (!allowed.includes(timeframe)) setTimeframe(allowed[0]);
   }
@@ -199,7 +251,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
   async function runFullAnalysis(requestedSymbol: string) {
     const clean = requestedSymbol.trim().toUpperCase();
     if (!clean || loading) { if (!clean) setError('Ingresá un ticker válido.'); return; }
-    setSymbol(clean); setTopSearch(clean); setChartRange('Todos');
+    setSymbol(clean); setTopSearch(clean); setChartRange('Todos'); setManualLevels([]);
     setLoading(true); setError(null); setNews(null); setEvents(null); setInsightsError(null);
     try {
       const [analysisResponse, portfolioResponse] = await Promise.all([
@@ -227,6 +279,7 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
       const result = await response.json() as TechnicalResponse;
       if (!response.ok || !result.snapshot || !result.bars) throw new Error(result.error ?? 'No fue posible actualizar el timeframe.');
       setBars(result.bars); setSnapshot(result.snapshot); setSource(result.source ?? source);
+      if (comparisonSymbol) void loadComparison(comparisonSymbol, next);
     } catch (e) { setTimeframe(snapshot.timeframe); setError(e instanceof Error ? e.message : 'Error al actualizar el timeframe.'); }
     finally { setLoading(false); }
   }
@@ -321,9 +374,11 @@ export function AnalysisDashboardV2({ initialBars, initialSnapshot }: Props) {
         </section>
       </aside>
       <section className="analystCenter">
-        <section className="surface chartSurface"><div className="chartToolbar"><div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item)=><button key={item} className={timeframe===item?'active':''} disabled={loading} onClick={()=>void changeTimeframe(item)}>{item==='1d'?'D':item==='1w'?'S':item==='1M'?'M':item}</button>)}</div><div className="chartTools"><span>⌁ Indicadores</span><span>⌁ Dibujos</span><span>◉ Comparar</span><span>⚙</span><span>⛶</span></div></div>
+        <section className="surface chartSurface"><div className="chartToolbar"><div className="timeframeRow">{STRATEGY_TIMEFRAMES[strategy].map((item)=><button key={item} className={timeframe===item?'active':''} disabled={loading} onClick={()=>void changeTimeframe(item)}>{item==='1d'?'D':item==='1w'?'S':item==='1M'?'M':item}</button>)}</div><div className="chartTools"><span>⌁ Indicadores</span><button type="button" className={chartToolPanel==='drawings'?'active':''} onClick={()=>setChartToolPanel(chartToolPanel==='drawings'?null:'drawings')}>⌁ Dibujos</button><button type="button" className={chartToolPanel==='compare'?'active':''} onClick={()=>setChartToolPanel(chartToolPanel==='compare'?null:'compare')}>◉ Comparar</button><span>⚙</span><span>⛶</span></div></div>
+          {chartToolPanel==='drawings'?<div className="chartToolPanel"><div><b>Dibujos manuales</b><small>Líneas horizontales por precio</small></div><input inputMode="decimal" placeholder={currentPrice.toFixed(2)} value={manualLevelInput} onChange={(e)=>setManualLevelInput(e.target.value)} onKeyDown={(e)=>{if(e.key==='Enter'){e.preventDefault();addManualLevel();}}}/><button type="button" onClick={addManualLevel}>Agregar nivel</button><button type="button" className="secondary" disabled={!manualLevels.length} onClick={()=>setManualLevels([])}>Limpiar</button>{manualLevels.length?<span>{manualLevels.map((level)=>level.toFixed(2)).join(' · ')}</span>:null}</div>:null}
+          {chartToolPanel==='compare'?<div className="chartToolPanel"><div><b>Comparar rendimiento</b><small>Serie normalizada al inicio del rango visible</small></div><div className="comparePresets"><button type="button" onClick={()=>void loadComparison('SPY')}>SPY</button><button type="button" onClick={()=>void loadComparison('QQQ')}>QQQ</button></div><input placeholder="Ticker" value={compareInput} onChange={(e)=>setCompareInput(e.target.value.toUpperCase())} onKeyDown={(e)=>{if(e.key==='Enter'){e.preventDefault();void loadComparison();}}}/><button type="button" disabled={comparisonLoading} onClick={()=>void loadComparison()}>{comparisonLoading?'Cargando…':'Comparar'}</button>{comparisonSymbol?<button type="button" className="secondary" onClick={clearComparison}>Quitar {comparisonSymbol}</button>:null}{comparisonError?<span className="toolError">{comparisonError}</span>:null}</div>:null}
           <div className="instrumentStrip"><div><span className="tickerLogo">◉</span><b>{fundamentals?.name ?? snapshot.symbol}</b><small> · {snapshot.timeframe.toUpperCase()} · {fundamentals?.sector ?? 'Mercado'}</small></div><div className="priceStrip"><b>{currentPrice.toFixed(2)}</b><span>{snapshot.trend==='BULL'?'Tendencia alcista':snapshot.trend==='BEAR'?'Tendencia bajista':'Tendencia neutral'}</span></div></div>
-          <TechnicalChart bars={visibleBars} snapshot={snapshot}/><div className="chartFooter">{CHART_RANGES.map((range)=><button type="button" key={range} className={chartRange===range?'active':''} onClick={()=>setChartRange(range)}>{range}</button>)}<small>{source==='demo-fixture'?'DEMO':source} · {visibleBars.length}/{bars.length} velas</small></div>
+          <TechnicalChart bars={visibleBars} snapshot={snapshot} comparisonBars={comparisonBars} comparisonSymbol={comparisonSymbol} manualLevels={manualLevels}/><div className="chartFooter">{CHART_RANGES.map((range)=><button type="button" key={range} className={chartRange===range?'active':''} onClick={()=>setChartRange(range)}>{range}</button>)}<small>{source==='demo-fixture'?'DEMO':source} · {visibleBars.length}/{bars.length} velas</small></div>
         </section>
         <section className="surface researchSurface"><h2>Análisis y fundamentos</h2><div className="researchTabs">{RESEARCH_TABS.map(([tab,label])=><button key={tab} className={researchTab===tab?'active':''} onClick={()=>setResearchTab(tab)}>{label}</button>)}</div>{researchContent()}</section>
       </section>

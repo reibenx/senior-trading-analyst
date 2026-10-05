@@ -28,6 +28,17 @@ export interface PriceZone {
   high: number;
 }
 
+export interface TradeRiskProfile {
+  label: string;
+  riskPercent: number;
+  maxPositionPercent: number;
+  trailingAtr: number;
+  tp1Percent: number;
+  tp2Percent: number;
+  runnerPercent: number;
+  preferredEntry: 'A' | 'B';
+}
+
 export interface TradePlan {
   symbol: string;
   strategy: Strategy;
@@ -42,6 +53,7 @@ export interface TradePlan {
   targets: number[];
   riskReward?: number;
   positionSize?: number;
+  riskProfile?: TradeRiskProfile;
   thesis: string[];
   risks: string[];
   invalidationConditions: string[];

@@ -5,9 +5,11 @@ import styles from '@/app/components/AlertPreferencesPanel.module.css';
 
 type Strategy = 'day' | 'swing' | 'position';
 type Decision = 'STRONG_ADD' | 'ADD' | 'TAKE_PROFIT' | 'REDUCE' | 'EXIT';
+type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 interface AlertPreferences {
   minConviction: number;
+  minPriority: Priority;
   strategies: Strategy[];
   entryA: boolean;
   entryB: boolean;
@@ -18,6 +20,7 @@ interface AlertPreferences {
 
 const DEFAULTS: AlertPreferences = {
   minConviction: 60,
+  minPriority: 'MEDIUM',
   strategies: ['day', 'swing', 'position'],
   entryA: true,
   entryB: true,
@@ -146,6 +149,18 @@ export function AlertPreferencesPanel() {
         </article>
 
         <article className={styles.card}>
+          <h2>Prioridad mínima</h2>
+          <div className={styles.priorityGrid}>
+            {(['LOW','MEDIUM','HIGH','CRITICAL'] as Priority[]).map((priority) => (
+              <button key={priority} type="button" className={preferences.minPriority===priority ? styles.active : ''} onClick={() => update('minPriority', priority)}>
+                {priority === 'LOW' ? 'Baja' : priority === 'MEDIUM' ? 'Media' : priority === 'HIGH' ? 'Alta' : 'Crítica'}
+              </button>
+            ))}
+          </div>
+          <p>Media es el filtro recomendado: exige contexto suficiente sin perder oportunidades tempranas.</p>
+        </article>
+
+        <article className={styles.card}>
           <h2>Estrategias vigiladas</h2>
           <div className={styles.buttonGrid}>
             {(['day','swing','position'] as Strategy[]).map((strategy) => (
@@ -180,7 +195,7 @@ export function AlertPreferencesPanel() {
       <div className={styles.footer}>
         <div>
           <b>Política activa</b>
-          <span>{preferences.strategies.join(' · ')} · convicción ≥ {preferences.minConviction} · Telegram sólo recibe señales que pasan este filtro.</span>
+          <span>{preferences.strategies.join(' · ')} · convicción ≥ {preferences.minConviction} · prioridad ≥ {preferences.minPriority} · Telegram sólo recibe señales que pasan este filtro.</span>
         </div>
         <button type="button" className={styles.secondary} onClick={() => { setPreferences(DEFAULTS); setDirty(true); setMessage(null); }} disabled={loading || saving}>Restaurar recomendado</button>
         <button type="button" className={styles.primary} onClick={save} disabled={loading || saving || !dirty}>{saving ? 'Guardando…' : dirty ? 'Guardar configuración' : 'Guardado'}</button>

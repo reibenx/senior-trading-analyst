@@ -72,7 +72,7 @@ export function MonitorRankingPanel() {
               <span>#1 nuevo capital</span>
               <b>{firstEligible?.symbol ?? '—'}</b>
               <small>
-                {ranking.leaderChange.changed
+                {ranking.leaderChange?.changed
                   ? `CAMBIO: ${ranking.leaderChange.previousSymbol ?? '—'} → ${ranking.leaderChange.currentSymbol ?? '—'}`
                   : 'sin cambio de líder'}
               </small>

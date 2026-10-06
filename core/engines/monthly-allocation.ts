@@ -23,9 +23,11 @@ export function buildMonthlyAllocationPlan(
   }
 
   const eligible = opportunities
-    .filter((item) => item.opportunityScore >= 62)
+    .filter((item) => item.opportunityScore >= 65)
     .filter((item) => item.action === 'AUMENTAR' || item.action === 'COMPRAR_EN_PULLBACK')
     .filter((item) => item.currentWeightPercent < 20)
+    .filter((item) => item.signalPriorityLevel === 'MEDIUM' || item.signalPriorityLevel === 'HIGH' || item.signalPriorityLevel === 'CRITICAL')
+    .filter((item) => item.marketRegime !== 'DEFENSIVE')
     .sort((a, b) => b.opportunityScore - a.opportunityScore)
     .slice(0, Math.max(1, Math.min(8, maxIdeas)));
 
@@ -52,7 +54,19 @@ export function buildMonthlyAllocationPlan(
           ? 0.85
           : 1;
     const pullbackFactor = item.action === 'COMPRAR_EN_PULLBACK' && (item.distanceToEntryPercent ?? 0) > 4 ? 0.75 : 1;
-    const strength = Math.max(1, item.opportunityScore - 55) * concentrationFactor * pullbackFactor;
+    const priorityFactor = item.signalPriorityLevel === 'CRITICAL'
+      ? 1.15
+      : item.signalPriorityLevel === 'HIGH'
+        ? 1.08
+        : 1;
+    const regimeFactor = item.marketRegime === 'RISK_ON'
+      ? 1.08
+      : item.marketRegime === 'MIXED'
+        ? 0.90
+        : item.marketRegime === 'UNKNOWN'
+          ? 0.85
+          : 0.75;
+    const strength = Math.max(1, item.opportunityScore - 55) * concentrationFactor * pullbackFactor * priorityFactor * regimeFactor;
     return { item, strength };
   });
 
@@ -70,7 +84,9 @@ export function buildMonthlyAllocationPlan(
     weight: cappedTotal > 0 ? weight / cappedTotal : 0,
   }));
 
-  const reserveRate = normalized.some(({ item }) => item.action === 'COMPRAR_EN_PULLBACK') ? 0.15 : 0.05;
+  const hasPullback = normalized.some(({ item }) => item.action === 'COMPRAR_EN_PULLBACK');
+  const hasPartialContext = normalized.some(({ item }) => item.marketRegime === 'MIXED' || item.marketRegime === 'UNKNOWN' || item.contextCoverage === 'NONE');
+  const reserveRate = hasPartialContext ? 0.20 : hasPullback ? 0.15 : 0.05;
   const investable = safeCapital * (1 - reserveRate);
 
   const items = normalized.map(({ item, weight }) => {
@@ -82,8 +98,8 @@ export function buildMonthlyAllocationPlan(
       opportunityScore: item.opportunityScore,
       currentWeightPercent: item.currentWeightPercent,
       rationale: item.action === 'AUMENTAR'
-        ? 'Score alto con concentración todavía compatible con una nueva compra.'
-        : 'Tesis favorable, pero conviene reservar la ejecución para una zona de entrada más eficiente.',
+        ? `Score alto, prioridad ${item.signalPriorityLevel ?? 'N/D'} y régimen ${item.marketRegime ?? 'N/D'} con concentración todavía compatible.`
+        : `Tesis favorable y prioridad ${item.signalPriorityLevel ?? 'N/D'}, pero conviene reservar la ejecución para una entrada más eficiente.`,
     };
   });
 
@@ -99,7 +115,7 @@ export function buildMonthlyAllocationPlan(
     notes: [
       'La asignación está expresada en USD de planificación; no convierte todavía a cantidad de CEDEARs.',
       'La ejecución en BYMA requerirá CCL y ratio de conversión vigente para cada CEDEAR.',
-      'Se mantiene una reserva cuando alguna idea requiere pullback en vez de compra inmediata.',
+      'Se mantiene una reserva cuando alguna idea requiere pullback o el contexto de mercado no está completamente alineado.',
     ],
   };
 }

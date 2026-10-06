@@ -11,6 +11,9 @@ import { getMarketDataProvider } from '@/core/providers/market-provider';
 import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
+import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
+import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
+import { buildPortfolioFingerprint, getPortfolioOpportunityStore, portfolioOpportunityTtlSeconds } from '@/core/persistence/portfolio-opportunity-store';
 import { buildPortfolioFingerprint, getPortfolioOpportunityStore } from '@/core/persistence/portfolio-opportunity-store';
 
 const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
@@ -99,6 +102,9 @@ export async function POST(request: Request) {
     : 0;
   const scanTargets = circularSlice(targets, startIndex, maxSymbols);
 
+  const opportunityStore = getPortfolioOpportunityStore();
+  const portfolioFingerprint = buildPortfolioFingerprint(positions);
+
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();
   const { preferences: alertPreferences, persistent: persistentAlertPreferences } = await getAlertPreferences().catch(() => ({ preferences: undefined, persistent: false }));
@@ -143,6 +149,39 @@ export async function POST(request: Request) {
         strategy: target.strategy,
         error: error instanceof Error ? error.message : 'Unknown scan error',
       });
+    }
+  }
+
+
+  let transversalRanking = null;
+  if (opportunityStore && targets.length) {
+    try {
+      const grouped = new Map<Strategy, string[]>();
+      for (const target of targets) {
+        const bucket = grouped.get(target.strategy) ?? [];
+        bucket.push(target.symbol);
+        grouped.set(target.strategy, bucket);
+      }
+
+      const consolidated = [];
+      for (const [strategy, symbols] of grouped) {
+        const cached = await opportunityStore.getMany(strategy, portfolioFingerprint, [...new Set(symbols)]);
+        consolidated.push(...cached.values());
+      }
+
+      transversalRanking = buildTransversalRanking({
+        opportunities: consolidated,
+        totalSymbols: targets.length,
+        portfolioFingerprint,
+      });
+
+      const ttl = Math.max(
+        ...([...grouped.keys()].map((strategy) => portfolioOpportunityTtlSeconds(strategy))),
+        60,
+      );
+      await opportunityStore.setTransversalRanking(transversalRanking, ttl).catch(() => undefined);
+    } catch {
+      transversalRanking = null;
     }
   }
 

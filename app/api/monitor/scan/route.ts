@@ -98,7 +98,13 @@ export async function POST(request: Request) {
     .sort((a, b) => Math.max(0, b.marketValue ?? 0) - Math.max(0, a.marketValue ?? 0))
     .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy }));
 
-  const targets = dedupeTargets([...parseWatchlist(), ...portfolioTargets]);
+  const watchlistTargets = parseWatchlist();
+  const targets = dedupeTargets([...watchlistTargets, ...portfolioTargets]);
+  const portfolioSymbols = new Set(portfolioTargets.map((target) => target.symbol));
+  const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST'>();
+  for (const target of targets) {
+    sourceBySymbol.set(target.symbol, portfolioSymbols.has(target.symbol) ? 'PORTFOLIO' : 'WATCHLIST');
+  }
   const marketProvider = getMarketDataProvider();
   const maxSymbols = configuredBatchSize(marketProvider.id);
   const cursorStore = getMonitorCursorStore();
@@ -186,6 +192,7 @@ export async function POST(request: Request) {
         totalSymbols: targets.length,
         portfolioFingerprint,
         previousRanking: previousTransversalRanking,
+        sourceBySymbol,
       });
 
       const rankingTtlSeconds = Math.max(
@@ -216,6 +223,7 @@ export async function POST(request: Request) {
             action: leader?.action,
             movement: leader?.movement,
             rankChange: leader?.rankChange,
+            source: leader?.source,
           },
         };
 

@@ -7,6 +7,7 @@ import { calculateTechnicalScore } from '@/core/engines/technical-score';
 import type { FundamentalScore } from '@/core/domain/fundamentals';
 import type { MarketContextSnapshot } from '@/core/domain/market-context';
 import { getStrategyRiskPreset } from '@/core/config/strategy-risk-presets';
+import { calculateSignalPriority } from '@/core/engines/signal-priority';
 
 function lineValue(snapshot: TechnicalSnapshot, id: string): number | undefined {
   const overlay = snapshot.overlays.find(
@@ -61,6 +62,7 @@ export function buildTradePlan(input: BuildTradePlanInput): TradePlan {
   });
 
   const decision = decide({ strategy, scores, technical: snapshot, alreadyOwned });
+  const signalPriority = calculateSignalPriority({ strategy, decision: decision.decision, scores, technical: snapshot, marketContext: input.marketContext });
 
   return {
     symbol: snapshot.symbol,
@@ -74,6 +76,7 @@ export function buildTradePlan(input: BuildTradePlanInput): TradePlan {
     stop,
     targets,
     riskReward,
+    signalPriority,
     riskProfile: {
       label: preset.label,
       riskPercent: preset.riskPercent,

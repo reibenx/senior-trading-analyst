@@ -39,6 +39,14 @@ export interface TradeRiskProfile {
   preferredEntry: 'A' | 'B';
 }
 
+export interface SignalPrioritySnapshot {
+  score: number;
+  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  marketRegime: 'RISK_ON' | 'MIXED' | 'DEFENSIVE' | 'UNKNOWN';
+  contextCoverage: 'FULL' | 'BENCHMARK_ONLY' | 'NONE';
+  reasons: string[];
+}
+
 export interface TradePlan {
   symbol: string;
   strategy: Strategy;
@@ -54,6 +62,7 @@ export interface TradePlan {
   riskReward?: number;
   positionSize?: number;
   riskProfile?: TradeRiskProfile;
+  signalPriority?: SignalPrioritySnapshot;
   thesis: string[];
   risks: string[];
   invalidationConditions: string[];

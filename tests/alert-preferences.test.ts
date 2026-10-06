@@ -16,6 +16,13 @@ const basePlan: TradePlan = {
     conviction: 65,
   },
   currentPrice: 100,
+  signalPriority: {
+    score: 72,
+    level: 'HIGH',
+    marketRegime: 'RISK_ON',
+    contextCoverage: 'BENCHMARK_ONLY',
+    reasons: [],
+  },
   entryA: { low: 99, high: 101 },
   entryB: { low: 94, high: 96 },
   stop: 90,

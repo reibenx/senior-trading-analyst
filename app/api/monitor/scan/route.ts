@@ -14,7 +14,6 @@ import { buildTradePlan } from '@/core/services/build-trade-plan';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
 import { buildPortfolioFingerprint, getPortfolioOpportunityStore, portfolioOpportunityTtlSeconds } from '@/core/persistence/portfolio-opportunity-store';
-import { buildPortfolioFingerprint, getPortfolioOpportunityStore } from '@/core/persistence/portfolio-opportunity-store';
 
 const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
   day: '15m',
@@ -102,9 +101,6 @@ export async function POST(request: Request) {
     : 0;
   const scanTargets = circularSlice(targets, startIndex, maxSymbols);
 
-  const opportunityStore = getPortfolioOpportunityStore();
-  const portfolioFingerprint = buildPortfolioFingerprint(positions);
-
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();
   const { preferences: alertPreferences, persistent: persistentAlertPreferences } = await getAlertPreferences().catch(() => ({ preferences: undefined, persistent: false }));
@@ -128,6 +124,13 @@ export async function POST(request: Request) {
         marketContext: analysis.marketContext,
         positions,
       });
+
+      const opportunity = buildPortfolioOpportunity(plan, positions);
+      if (opportunityStore) {
+        await opportunityStore
+          .set(target.strategy, portfolioFingerprint, opportunity, portfolioOpportunityTtlSeconds(target.strategy))
+          .catch(() => undefined);
+      }
 
       const events = await agent.evaluate(plan);
       const ranked = target.strategy === portfolioStrategy ? rankingBySymbol.get(target.symbol.toUpperCase()) : undefined;
@@ -163,7 +166,7 @@ export async function POST(request: Request) {
         grouped.set(target.strategy, bucket);
       }
 
-      const consolidated = [];
+      const consolidated: ReturnType<typeof buildPortfolioOpportunity>[] = [];
       for (const [strategy, symbols] of grouped) {
         const cached = await opportunityStore.getMany(strategy, portfolioFingerprint, [...new Set(symbols)]);
         consolidated.push(...cached.values());
@@ -201,6 +204,7 @@ export async function POST(request: Request) {
       strategy: rankingSnapshot.strategy,
       top3: rankingSnapshot.items.slice(0, 3),
     } : null,
+    transversalRanking,
     results,
   });
 }

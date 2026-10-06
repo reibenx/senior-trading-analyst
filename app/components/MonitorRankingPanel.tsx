@@ -10,8 +10,11 @@ interface Response {
   error?: string;
 }
 
+type SourceFilter = 'ALL' | 'PORTFOLIO' | 'WATCHLIST' | 'NEW_OPPORTUNITY';
+
 export function MonitorRankingPanel() {
   const [ranking, setRanking] = useState<TransversalRankingSnapshot | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +35,19 @@ export function MonitorRankingPanel() {
 
   useEffect(() => { void refresh(); }, []);
 
-  const top = ranking?.items.slice(0, 5) ?? [];
-  const capitalIdeas = ranking?.items.filter((item) => item.eligibleForNewCapital).slice(0, 5) ?? [];
+  const filteredItems = ranking?.items.filter((item) => sourceFilter === 'ALL' || item.source === sourceFilter) ?? [];
+  const top = filteredItems.slice(0, 5);
+  const capitalIdeas = filteredItems.filter((item) => item.eligibleForNewCapital).slice(0, 5);
   const managementPriorities = ranking?.items
     .filter((item) => !item.eligibleForNewCapital && (item.action === 'REDUCIR' || item.action === 'TOMAR_GANANCIAS' || item.action === 'REVISAR_TESIS'))
     .slice(0, 5) ?? [];
   const firstEligible = capitalIdeas[0];
+
+  function sourceLabel(item: TransversalRankingSnapshot['items'][number]) {
+    if (item.source === 'PORTFOLIO') return 'EN CARTERA';
+    if (item.source === 'NEW_OPPORTUNITY') return 'NUEVA OPORTUNIDAD';
+    return 'WATCHLIST';
+  }
 
   function movementLabel(item: TransversalRankingSnapshot['items'][number]) {
     if (item.movement === 'NEW') return 'NUEVO';
@@ -80,6 +90,21 @@ export function MonitorRankingPanel() {
             <div><span>Actualizado</span><b>{new Date(ranking.generatedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</b><small>{new Date(ranking.generatedAt).toLocaleDateString('es-AR')}</small></div>
           </div>
 
+          <div className={styles.filters}>
+            <button type="button" className={sourceFilter === 'ALL' ? styles.activeFilter : ''} onClick={() => setSourceFilter('ALL')}>
+              Todos <b>{ranking.items.length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'PORTFOLIO' ? styles.activeFilter : ''} onClick={() => setSourceFilter('PORTFOLIO')}>
+              En cartera <b>{ranking.sourceCounts?.portfolio ?? ranking.items.filter((item) => item.source === 'PORTFOLIO').length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'WATCHLIST' ? styles.activeFilter : ''} onClick={() => setSourceFilter('WATCHLIST')}>
+              Watchlist <b>{ranking.sourceCounts?.watchlist ?? ranking.items.filter((item) => item.source === 'WATCHLIST').length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'NEW_OPPORTUNITY' ? styles.activeFilter : ''} onClick={() => setSourceFilter('NEW_OPPORTUNITY')}>
+              Nuevas <b>{ranking.sourceCounts?.newOpportunities ?? ranking.items.filter((item) => item.source === 'NEW_OPPORTUNITY').length}</b>
+            </button>
+          </div>
+
           <div className={styles.sectionTitle}><div><span>NUEVO CAPITAL</span><h2>Mejores candidatos elegibles</h2></div><small>Ordenados por score ajustado, concentración y contexto</small></div>
           <div className={styles.grid}>
             {(capitalIdeas.length ? capitalIdeas : top).map((item) => (
@@ -94,6 +119,11 @@ export function MonitorRankingPanel() {
                   }>{movementLabel(item)}</em>
                 </div>
                 <div className={styles.title}><b>{item.symbol}</b><span>{item.strategy.toUpperCase()}</span></div>
+                <span className={
+                  item.source === 'PORTFOLIO' ? styles.sourcePortfolio
+                    : item.source === 'NEW_OPPORTUNITY' ? styles.sourceNew
+                      : styles.sourceWatchlist
+                }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>
                 <dl>

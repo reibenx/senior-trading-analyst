@@ -1,5 +1,5 @@
-import { PortfolioDashboard } from '@/app/components/PortfolioDashboard';
+import { PortfolioManagerDashboard } from '@/app/components/PortfolioManagerDashboard';
 
 export default function PortfolioPage() {
-  return <PortfolioDashboard />;
+  return <PortfolioManagerDashboard />;
 }

@@ -8,12 +8,25 @@ export type PortfolioAction =
   | 'REDUCIR'
   | 'REVISAR_TESIS';
 
+export interface OpportunityScoreBreakdown {
+  conviction: number;
+  signalPriority: number;
+  portfolioFit: number;
+  valuation: number;
+  entryProximity: number;
+  market: number;
+  regimeAdjustment: number;
+  contextAdjustment: number;
+  concentrationPenalty: number;
+}
+
 export interface PortfolioOpportunity {
   symbol: string;
   strategy: Strategy;
   decision: Decision;
   action: PortfolioAction;
   opportunityScore: number;
+  scoreBreakdown?: OpportunityScoreBreakdown;
   signalPriorityScore?: number;
   signalPriorityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   marketRegime?: 'RISK_ON' | 'MIXED' | 'DEFENSIVE' | 'UNKNOWN';
@@ -69,4 +82,22 @@ export interface PortfolioOpportunitySummary {
     ttlSeconds: number;
     portfolioFingerprint: string;
   };
+}
+
+
+export interface PortfolioRankingSnapshotItem {
+  rank: number;
+  symbol: string;
+  opportunityScore: number;
+  action: PortfolioAction;
+  signalPriorityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  marketRegime?: 'RISK_ON' | 'MIXED' | 'DEFENSIVE' | 'UNKNOWN';
+  currentWeightPercent: number;
+}
+
+export interface PortfolioRankingSnapshot {
+  generatedAt: string;
+  strategy: Strategy;
+  portfolioFingerprint: string;
+  items: PortfolioRankingSnapshotItem[];
 }

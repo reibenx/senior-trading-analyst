@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { AlertEvent, Strategy } from '@/core/domain/trading';
-import type { PortfolioOpportunity } from '@/core/domain/opportunity';
+import type { PortfolioOpportunity, TransversalRankingSnapshot } from '@/core/domain/opportunity';
 import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
   }
 
 
-  let transversalRanking = null;
+  let transversalRanking: TransversalRankingSnapshot | null = null;
   if (opportunityStore && targets.length) {
     try {
       const previousTransversalRanking = await opportunityStore

@@ -76,16 +76,28 @@ export function buildPortfolioOpportunity(plan: TradePlan, positions: Position[]
 
   const contextAdjustment = contextCoverage === 'NONE' ? -3 : 0;
 
+  const scoreBreakdown = {
+    conviction: Math.round(plan.scores.conviction * 0.30 * 10) / 10,
+    signalPriority: Math.round(priorityScore * 0.25 * 10) / 10,
+    portfolioFit: Math.round(plan.scores.portfolioFit * 0.15 * 10) / 10,
+    valuation: Math.round(plan.scores.valuation * 0.10 * 10) / 10,
+    entryProximity: Math.round(proximityScore * 0.10 * 10) / 10,
+    market: Math.round(plan.scores.market * 0.10 * 10) / 10,
+    regimeAdjustment,
+    contextAdjustment,
+    concentrationPenalty,
+  };
+
   const opportunityScore = Math.round(clamp(
-    plan.scores.conviction * 0.30
-      + priorityScore * 0.25
-      + plan.scores.portfolioFit * 0.15
-      + plan.scores.valuation * 0.10
-      + proximityScore * 0.10
-      + plan.scores.market * 0.10
-      + regimeAdjustment
-      + contextAdjustment
-      - concentrationPenalty,
+    scoreBreakdown.conviction
+      + scoreBreakdown.signalPriority
+      + scoreBreakdown.portfolioFit
+      + scoreBreakdown.valuation
+      + scoreBreakdown.entryProximity
+      + scoreBreakdown.market
+      + scoreBreakdown.regimeAdjustment
+      + scoreBreakdown.contextAdjustment
+      - scoreBreakdown.concentrationPenalty,
   ));
 
   const preferred = preferredEntryZone(plan);
@@ -96,6 +108,7 @@ export function buildPortfolioOpportunity(plan: TradePlan, positions: Position[]
     decision: plan.decision,
     action: classifyAction(plan, opportunityScore, distanceToEntryPercent),
     opportunityScore,
+    scoreBreakdown,
     signalPriorityScore: plan.signalPriority?.score,
     signalPriorityLevel: plan.signalPriority?.level,
     marketRegime: plan.signalPriority?.marketRegime,

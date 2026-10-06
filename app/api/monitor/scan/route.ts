@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { Strategy } from '@/core/domain/trading';
+import type { PortfolioOpportunity } from '@/core/domain/opportunity';
 import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
@@ -207,7 +208,7 @@ export async function POST(request: Request) {
         grouped.set(target.strategy, current);
       }
 
-      const accumulated = [];
+      const accumulated: PortfolioOpportunity[] = [];
       for (const [strategy, symbols] of grouped) {
         const cached = await opportunityStore.getMany(strategy, portfolioFingerprint, [...new Set(symbols)]);
         accumulated.push(...cached.values());

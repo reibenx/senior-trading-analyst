@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
-import type { PortfolioOpportunity } from '@/core/domain/opportunity';
+import type { PortfolioOpportunity, PortfolioRankingSnapshot } from '@/core/domain/opportunity';
 import type { Position, Strategy } from '@/core/domain/trading';
 import { getRedisRestConfig } from '@/core/persistence/redis-env';
 
 export interface PortfolioOpportunityStore {
   getMany(strategy: Strategy, portfolioFingerprint: string, symbols: string[]): Promise<Map<string, PortfolioOpportunity>>;
   set(strategy: Strategy, portfolioFingerprint: string, opportunity: PortfolioOpportunity, ttlSeconds: number): Promise<void>;
+  getLatestRanking(strategy: Strategy, portfolioFingerprint: string): Promise<PortfolioRankingSnapshot | null>;
+  setLatestRanking(snapshot: PortfolioRankingSnapshot, ttlSeconds: number): Promise<void>;
 }
 
 export function buildPortfolioFingerprint(positions: Position[]): string {
@@ -32,6 +34,10 @@ export class UpstashPortfolioOpportunityStore implements PortfolioOpportunitySto
 
   private key(strategy: Strategy, portfolioFingerprint: string, symbol: string) {
     return `senior-trading-analyst:portfolio-opportunity:${strategy}:${portfolioFingerprint}:${symbol.toUpperCase()}`;
+  }
+
+  private rankingKey(strategy: Strategy, portfolioFingerprint: string) {
+    return `senior-trading-analyst:portfolio-ranking:${strategy}:${portfolioFingerprint}`;
   }
 
   private async command<T = unknown>(command: unknown[]): Promise<T> {
@@ -75,6 +81,27 @@ export class UpstashPortfolioOpportunityStore implements PortfolioOpportunitySto
       'SET',
       this.key(strategy, portfolioFingerprint, opportunity.symbol),
       JSON.stringify(opportunity),
+      'EX',
+      ttl,
+    ]);
+  }
+
+  async getLatestRanking(strategy: Strategy, portfolioFingerprint: string): Promise<PortfolioRankingSnapshot | null> {
+    const raw = await this.command<string | null>(['GET', this.rankingKey(strategy, portfolioFingerprint)]);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as PortfolioRankingSnapshot;
+    } catch {
+      return null;
+    }
+  }
+
+  async setLatestRanking(snapshot: PortfolioRankingSnapshot, ttlSeconds: number): Promise<void> {
+    const ttl = Math.max(60, Math.floor(ttlSeconds));
+    await this.command([
+      'SET',
+      this.rankingKey(snapshot.strategy, snapshot.portfolioFingerprint),
+      JSON.stringify(snapshot),
       'EX',
       ttl,
     ]);

@@ -108,19 +108,90 @@ export async function POST(request: Request) {
     .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy, source: 'PORTFOLIO' as const }));
 
   const watchlistTargets = parseWatchlist();
-  const targets = dedupeTargets([...watchlistTargets, ...portfolioTargets]);
+  const baseTargets = dedupeTargets([...watchlistTargets, ...portfolioTargets]);
   const portfolioSymbols = new Set(portfolioTargets.map((target) => target.symbol));
-  const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST'>();
-  for (const target of targets) {
-    sourceBySymbol.set(target.symbol, portfolioSymbols.has(target.symbol) ? 'PORTFOLIO' : 'WATCHLIST');
-  }
   const marketProvider = getMarketDataProvider();
+
+  const scannerSummary = {
+    enabled: marketScannerEnabled(),
+    universeSize: 0,
+    inspected: 0,
+    promoted: [] as Array<{ symbol: string; score: number; reasons: string[] }>,
+    rejected: [] as Array<{ symbol: string; score: number }>,
+  };
+
+  const scannerTargets: ScanTarget[] = [];
+  let scannerUniverse: string[] = [];
+  if (scannerSummary.enabled) {
+    const baseSymbols = new Set(baseTargets.map((target) => target.symbol));
+    scannerUniverse = parseScannerUniverse(process.env.MARKET_SCANNER_UNIVERSE)
+      .filter((symbol) => !baseSymbols.has(symbol));
+    scannerSummary.universeSize = scannerUniverse.length;
+
+    const scannerCursor = getMonitorCursorStore('market-scanner');
+    const scannerBatch = marketScannerBatchSize();
+    const scannerStart = scannerCursor && scannerUniverse.length
+      ? await scannerCursor.take(scannerUniverse.length, scannerBatch).catch(() => 0)
+      : 0;
+    const candidates = circularSlice(scannerUniverse, scannerStart, scannerBatch);
+    const threshold = marketScannerThreshold();
+
+    for (const symbol of candidates) {
+      try {
+        const bars = await marketProvider.getBars({
+          symbol,
+          timeframe: DEFAULT_TIMEFRAME[portfolioStrategy],
+          limit: 260,
+        });
+        const snapshot = buildTechnicalSnapshot({
+          symbol,
+          timeframe: DEFAULT_TIMEFRAME[portfolioStrategy],
+          bars,
+        });
+        const candidate = preScoreTechnicalCandidate(symbol, snapshot, portfolioStrategy);
+        scannerSummary.inspected += 1;
+        if (candidate.score >= threshold) {
+          scannerTargets.push({ symbol, strategy: portfolioStrategy, source: 'SCANNER' });
+          scannerSummary.promoted.push({ symbol, score: candidate.score, reasons: candidate.reasons });
+        } else {
+          scannerSummary.rejected.push({ symbol, score: candidate.score });
+        }
+      } catch {
+        scannerSummary.inspected += 1;
+      }
+    }
+  }
+
+  const rankingTargets = dedupeTargets([
+    ...baseTargets,
+    ...scannerUniverse.map((symbol) => ({
+      symbol,
+      strategy: portfolioStrategy,
+      source: 'SCANNER' as const,
+    })),
+  ]);
+
+  const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>();
+  for (const target of rankingTargets) {
+    sourceBySymbol.set(
+      target.symbol,
+      portfolioSymbols.has(target.symbol)
+        ? 'PORTFOLIO'
+        : target.source === 'SCANNER'
+          ? 'SCANNER'
+          : 'WATCHLIST',
+    );
+  }
+
   const maxSymbols = configuredBatchSize(marketProvider.id);
   const cursorStore = getMonitorCursorStore();
-  const startIndex = cursorStore && targets.length
-    ? await cursorStore.take(targets.length, maxSymbols).catch(() => 0)
+  const startIndex = cursorStore && baseTargets.length
+    ? await cursorStore.take(baseTargets.length, maxSymbols).catch(() => 0)
     : 0;
-  const scanTargets = circularSlice(targets, startIndex, maxSymbols);
+  const scanTargets = [
+    ...circularSlice(baseTargets, startIndex, maxSymbols),
+    ...scannerTargets,
+  ];
 
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();

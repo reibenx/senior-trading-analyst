@@ -101,3 +101,33 @@ export interface PortfolioRankingSnapshot {
   portfolioFingerprint: string;
   items: PortfolioRankingSnapshotItem[];
 }
+
+export interface TransversalRankingItem {
+  rank: number;
+  symbol: string;
+  strategy: Strategy;
+  action: PortfolioAction;
+  opportunityScore: number;
+  adjustedScore: number;
+  signalPriorityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  signalPriorityScore?: number;
+  marketRegime?: 'RISK_ON' | 'MIXED' | 'DEFENSIVE' | 'UNKNOWN';
+  contextCoverage?: 'FULL' | 'BENCHMARK_ONLY' | 'NONE';
+  currentWeightPercent: number;
+  valuationScore: number;
+  technicalScore: number;
+  conviction: number;
+  eligibleForNewCapital: boolean;
+  dataQuality: 'FULL' | 'PARTIAL' | 'LIMITED';
+  notes: string[];
+}
+
+export interface TransversalRankingSnapshot {
+  generatedAt: string;
+  portfolioFingerprint: string;
+  coveredSymbols: number;
+  totalSymbols: number;
+  coveragePercent: number;
+  items: TransversalRankingItem[];
+  notes: string[];
+}

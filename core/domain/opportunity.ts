@@ -103,12 +103,14 @@ export interface PortfolioRankingSnapshot {
 }
 
 export type RankingMovement = 'NEW' | 'UP' | 'DOWN' | 'UNCHANGED';
+export type OpportunityUniverseSource = 'PORTFOLIO' | 'WATCHLIST' | 'NEW_OPPORTUNITY';
 
 export interface TransversalRankingItem {
   rank: number;
   previousRank?: number;
   rankChange?: number;
   movement: RankingMovement;
+  source: OpportunityUniverseSource;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;
@@ -133,6 +135,12 @@ export interface TransversalRankingLeaderChange {
   currentSymbol?: string;
 }
 
+export interface TransversalRankingSourceCounts {
+  portfolio: number;
+  watchlist: number;
+  newOpportunities: number;
+}
+
 export interface TransversalRankingSnapshot {
   generatedAt: string;
   previousGeneratedAt?: string;
@@ -141,6 +149,7 @@ export interface TransversalRankingSnapshot {
   coveredSymbols: number;
   totalSymbols: number;
   coveragePercent: number;
+  sourceCounts: TransversalRankingSourceCounts;
   items: TransversalRankingItem[];
   notes: string[];
 }

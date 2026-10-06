@@ -164,6 +164,9 @@ export async function POST(request: Request) {
   let transversalRanking = null;
   if (opportunityStore && targets.length) {
     try {
+      const previousTransversalRanking = await opportunityStore
+        .getTransversalRanking(portfolioFingerprint)
+        .catch(() => null);
       const grouped = new Map<Strategy, string[]>();
       for (const target of targets) {
         const current = grouped.get(target.strategy) ?? [];
@@ -181,6 +184,7 @@ export async function POST(request: Request) {
         opportunities: accumulated,
         totalSymbols: targets.length,
         portfolioFingerprint,
+        previousRanking: previousTransversalRanking,
       });
 
       const rankingTtlSeconds = Math.max(

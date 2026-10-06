@@ -11,6 +11,7 @@ import { getMarketDataProvider } from '@/core/providers/market-provider';
 import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
+import { buildPortfolioFingerprint, getPortfolioOpportunityStore } from '@/core/persistence/portfolio-opportunity-store';
 
 const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
   day: '15m',
@@ -77,6 +78,12 @@ export async function POST(request: Request) {
   const broker = getBrokerAdapter();
   const positions = broker ? await broker.getPositions().catch(() => []) : [];
   const portfolioStrategy = parseStrategy(process.env.MONITOR_PORTFOLIO_STRATEGY?.trim());
+  const portfolioFingerprint = buildPortfolioFingerprint(positions);
+  const opportunityStore = getPortfolioOpportunityStore();
+  const rankingSnapshot = opportunityStore
+    ? await opportunityStore.getLatestRanking(portfolioStrategy, portfolioFingerprint).catch(() => null)
+    : null;
+  const rankingBySymbol = new Map((rankingSnapshot?.items ?? []).map((item) => [item.symbol.toUpperCase(), item]));
 
   const portfolioTargets = positions
     .filter((position) => position.quantity > 0)
@@ -117,6 +124,7 @@ export async function POST(request: Request) {
       });
 
       const events = await agent.evaluate(plan);
+      const ranked = target.strategy === portfolioStrategy ? rankingBySymbol.get(target.symbol.toUpperCase()) : undefined;
       results.push({
         symbol: target.symbol,
         strategy: target.strategy,
@@ -124,6 +132,9 @@ export async function POST(request: Request) {
         conviction: plan.scores.conviction,
         riskProfile: plan.riskProfile,
         signalPriority: plan.signalPriority,
+        portfolioRank: ranked?.rank,
+        portfolioOpportunityScore: ranked?.opportunityScore,
+        portfolioAction: ranked?.action,
         events,
       });
     } catch (error) {
@@ -146,6 +157,11 @@ export async function POST(request: Request) {
     persistentDeduplication: Boolean(stateStore),
     persistentAlertPreferences,
     alertPreferences,
+    ranking: rankingSnapshot ? {
+      generatedAt: rankingSnapshot.generatedAt,
+      strategy: rankingSnapshot.strategy,
+      top3: rankingSnapshot.items.slice(0, 3),
+    } : null,
     results,
   });
 }

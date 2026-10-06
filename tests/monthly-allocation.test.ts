@@ -37,6 +37,11 @@ function opportunity(
     decision: 'ADD',
     action,
     opportunityScore: score,
+    signalPriorityScore: 78,
+    signalPriorityLevel: 'HIGH',
+    marketRegime: 'RISK_ON',
+    contextCoverage: 'BENCHMARK_ONLY',
+    preferredEntry: 'B',
     currentWeightPercent: weight,
     distanceToEntryPercent,
     scores: { ...basePlan.scores, conviction: score },
@@ -47,7 +52,27 @@ function opportunity(
     target: 120,
     thesis: [],
     risks: [],
-    plan: { ...basePlan, symbol },
+    plan: {
+      ...basePlan,
+      symbol,
+      riskProfile: {
+        label: 'Position · amplio',
+        riskPercent: 1.25,
+        maxPositionPercent: 35,
+        trailingAtr: 3.5,
+        tp1Percent: 20,
+        tp2Percent: 30,
+        runnerPercent: 50,
+        preferredEntry: 'B',
+      },
+      signalPriority: {
+        score: 78,
+        level: 'HIGH',
+        marketRegime: 'RISK_ON',
+        contextCoverage: 'BENCHMARK_ONLY',
+        reasons: [],
+      },
+    },
   };
 }
 

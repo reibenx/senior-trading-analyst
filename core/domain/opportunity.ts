@@ -14,6 +14,11 @@ export interface PortfolioOpportunity {
   decision: Decision;
   action: PortfolioAction;
   opportunityScore: number;
+  signalPriorityScore?: number;
+  signalPriorityLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  marketRegime?: 'RISK_ON' | 'MIXED' | 'DEFENSIVE' | 'UNKNOWN';
+  contextCoverage?: 'FULL' | 'BENCHMARK_ONLY' | 'NONE';
+  preferredEntry?: 'A' | 'B';
   currentWeightPercent: number;
   distanceToEntryPercent?: number;
   scores: ScoreCard;

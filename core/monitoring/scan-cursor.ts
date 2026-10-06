@@ -5,12 +5,15 @@ export interface MonitorCursorStore {
 }
 
 class RedisMonitorCursorStore implements MonitorCursorStore {
-  private readonly key = 'senior-trading-analyst:monitor:cursor';
+  private readonly key: string;
 
   constructor(
     private readonly restUrl: string,
     private readonly token: string,
-  ) {}
+    scope: string,
+  ) {
+    this.key = `senior-trading-analyst:${scope}:cursor`;
+  }
 
   async take(total: number, batchSize: number): Promise<number> {
     if (total <= 0) return 0;
@@ -32,10 +35,10 @@ class RedisMonitorCursorStore implements MonitorCursorStore {
   }
 }
 
-export function getMonitorCursorStore(): MonitorCursorStore | null {
+export function getMonitorCursorStore(scope = 'monitor'): MonitorCursorStore | null {
   const config = getRedisRestConfig();
   if (!config) return null;
-  return new RedisMonitorCursorStore(config.restUrl, config.token);
+  return new RedisMonitorCursorStore(config.restUrl, config.token, scope);
 }
 
 export function circularSlice<T>(items: T[], start: number, count: number): T[] {

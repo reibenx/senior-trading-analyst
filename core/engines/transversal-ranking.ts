@@ -5,7 +5,7 @@ interface Input {
   totalSymbols: number;
   portfolioFingerprint: string;
   previousRanking?: TransversalRankingSnapshot | null;
-  sourceBySymbol?: Map<string, 'PORTFOLIO' | 'WATCHLIST'>;
+  sourceBySymbol?: Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>;
 }
 
 function dataQuality(item: PortfolioOpportunity): 'FULL' | 'PARTIAL' | 'LIMITED' {
@@ -90,9 +90,11 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       const baseSource = input.sourceBySymbol?.get(item.symbol.toUpperCase()) ?? 'WATCHLIST';
       const source = baseSource === 'PORTFOLIO'
         ? 'PORTFOLIO' as const
-        : movement === 'NEW'
+        : baseSource === 'SCANNER'
           ? 'NEW_OPPORTUNITY' as const
-          : 'WATCHLIST' as const;
+          : movement === 'NEW'
+            ? 'NEW_OPPORTUNITY' as const
+            : 'WATCHLIST' as const;
 
       return {
         ...item,

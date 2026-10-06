@@ -151,6 +151,41 @@ describe('transversal ranking', () => {
     expect(second.leaderChange.currentSymbol).toBe('BBB');
   });
 
+  it('classifies portfolio, watchlist and first-seen external opportunities', () => {
+    const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST'>([
+      ['AAA', 'PORTFOLIO'],
+      ['BBB', 'WATCHLIST'],
+    ]);
+
+    const first = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 82 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 80 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+      sourceBySymbol,
+    });
+
+    expect(first.items.find((item) => item.symbol === 'AAA')?.source).toBe('PORTFOLIO');
+    expect(first.items.find((item) => item.symbol === 'BBB')?.source).toBe('NEW_OPPORTUNITY');
+    expect(first.sourceCounts.newOpportunities).toBe(1);
+
+    const second = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 82 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 80 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+      sourceBySymbol,
+      previousRanking: first,
+    });
+
+    expect(second.items.find((item) => item.symbol === 'BBB')?.source).toBe('WATCHLIST');
+    expect(second.sourceCounts.watchlist).toBe(1);
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

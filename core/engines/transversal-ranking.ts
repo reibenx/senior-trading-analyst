@@ -5,6 +5,7 @@ interface Input {
   totalSymbols: number;
   portfolioFingerprint: string;
   previousRanking?: TransversalRankingSnapshot | null;
+  sourceBySymbol?: Map<string, 'PORTFOLIO' | 'WATCHLIST'>;
 }
 
 function dataQuality(item: PortfolioOpportunity): 'FULL' | 'PARTIAL' | 'LIMITED' {
@@ -86,12 +87,20 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
             ? 'UP' as const
             : 'DOWN' as const;
 
+      const baseSource = input.sourceBySymbol?.get(item.symbol.toUpperCase()) ?? 'WATCHLIST';
+      const source = baseSource === 'PORTFOLIO'
+        ? 'PORTFOLIO' as const
+        : movement === 'NEW'
+          ? 'NEW_OPPORTUNITY' as const
+          : 'WATCHLIST' as const;
+
       return {
         ...item,
         rank,
         previousRank: previous?.rank,
         rankChange,
         movement,
+        source,
       };
     });
 
@@ -99,6 +108,11 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
   const coveragePercent = input.totalSymbols > 0 ? Math.round((coveredSymbols / input.totalSymbols) * 100) : 0;
   const previousLeader = input.previousRanking?.items.find((item) => item.eligibleForNewCapital)?.symbol;
   const currentLeader = ranked.find((item) => item.eligibleForNewCapital)?.symbol;
+  const sourceCounts = {
+    portfolio: ranked.filter((item) => item.source === 'PORTFOLIO').length,
+    watchlist: ranked.filter((item) => item.source === 'WATCHLIST').length,
+    newOpportunities: ranked.filter((item) => item.source === 'NEW_OPPORTUNITY').length,
+  };
   const leaderChange = {
     changed: Boolean(input.previousRanking && previousLeader !== currentLeader),
     previousSymbol: previousLeader,
@@ -113,6 +127,7 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
     coveredSymbols,
     totalSymbols: input.totalSymbols,
     coveragePercent,
+    sourceCounts,
     items: ranked,
     notes: [
       'Ranking transversal del monitor: consolida lotes rotativos y penaliza concentración, contexto adverso y cobertura incompleta.',

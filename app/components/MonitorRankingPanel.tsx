@@ -10,8 +10,11 @@ interface Response {
   error?: string;
 }
 
+type SourceFilter = 'ALL' | 'PORTFOLIO' | 'WATCHLIST' | 'NEW_OPPORTUNITY';
+
 export function MonitorRankingPanel() {
   const [ranking, setRanking] = useState<TransversalRankingSnapshot | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,12 +35,21 @@ export function MonitorRankingPanel() {
 
   useEffect(() => { void refresh(); }, []);
 
-  const top = ranking?.items.slice(0, 5) ?? [];
-  const capitalIdeas = ranking?.items.filter((item) => item.eligibleForNewCapital).slice(0, 5) ?? [];
-  const managementPriorities = ranking?.items
-    .filter((item) => !item.eligibleForNewCapital && (item.action === 'REDUCIR' || item.action === 'TOMAR_GANANCIAS' || item.action === 'REVISAR_TESIS'))
-    .slice(0, 5) ?? [];
-  const firstEligible = capitalIdeas[0];
+  function resolvedSource(item: TransversalRankingSnapshot['items'][number]) {
+    return item.source ?? (item.currentWeightPercent > 0 ? 'PORTFOLIO' : 'WATCHLIST');
+  }
+
+  const filteredItems = ranking?.items.filter((item) => sourceFilter === 'ALL' || resolvedSource(item) === sourceFilter) ?? [];
+  const top = filteredItems.slice(0, 5);
+  const capitalIdeas = filteredItems.filter((item) => item.eligibleForNewCapital).slice(0, 5);
+  const globalFirstEligible = ranking?.items.find((item) => item.eligibleForNewCapital);
+
+  function sourceLabel(item: TransversalRankingSnapshot['items'][number]) {
+    const source = resolvedSource(item);
+    if (source === 'PORTFOLIO') return 'EN CARTERA';
+    if (source === 'NEW_OPPORTUNITY') return 'NUEVA OPORTUNIDAD';
+    return 'WATCHLIST';
+  }
 
   function movementLabel(item: TransversalRankingSnapshot['items'][number]) {
     if (item.movement === 'NEW') return 'NUEVO';
@@ -70,7 +82,7 @@ export function MonitorRankingPanel() {
             <div><span>Cobertura</span><b>{ranking.coveragePercent}%</b><small>{ranking.coveredSymbols}/{ranking.totalSymbols} símbolos</small></div>
             <div>
               <span>#1 nuevo capital</span>
-              <b>{firstEligible?.symbol ?? '—'}</b>
+              <b>{globalFirstEligible?.symbol ?? '—'}</b>
               <small>
                 {ranking.leaderChange?.changed
                   ? `CAMBIO: ${ranking.leaderChange.previousSymbol ?? '—'} → ${ranking.leaderChange.currentSymbol ?? '—'}`
@@ -80,7 +92,22 @@ export function MonitorRankingPanel() {
             <div><span>Actualizado</span><b>{new Date(ranking.generatedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</b><small>{new Date(ranking.generatedAt).toLocaleDateString('es-AR')}</small></div>
           </div>
 
-          <div className={styles.sectionTitle}><div><span>NUEVO CAPITAL</span><h2>Mejores candidatos elegibles</h2></div><small>Ordenados por score ajustado, concentración y contexto</small></div>
+          <div className={styles.filters}>
+            <button type="button" className={sourceFilter === 'ALL' ? styles.activeFilter : ''} onClick={() => setSourceFilter('ALL')}>
+              Todos <b>{ranking.items.length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'PORTFOLIO' ? styles.activeFilter : ''} onClick={() => setSourceFilter('PORTFOLIO')}>
+              En cartera <b>{ranking.sourceCounts?.portfolio ?? ranking.items.filter((item) => resolvedSource(item) === 'PORTFOLIO').length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'WATCHLIST' ? styles.activeFilter : ''} onClick={() => setSourceFilter('WATCHLIST')}>
+              Watchlist <b>{ranking.sourceCounts?.watchlist ?? ranking.items.filter((item) => resolvedSource(item) === 'WATCHLIST').length}</b>
+            </button>
+            <button type="button" className={sourceFilter === 'NEW_OPPORTUNITY' ? styles.activeFilter : ''} onClick={() => setSourceFilter('NEW_OPPORTUNITY')}>
+              Nuevas <b>{ranking.sourceCounts?.newOpportunities ?? ranking.items.filter((item) => resolvedSource(item) === 'NEW_OPPORTUNITY').length}</b>
+            </button>
+          </div>
+
+          <div className={styles.sectionTitle}><div><span>NUEVO CAPITAL</span><h2>Mejores candidatos elegibles</h2></div><small>{sourceFilter === 'ALL' ? 'Universo completo' : `Filtro: ${sourceFilter.replaceAll('_', ' ')}`} · ordenados por score ajustado</small></div>
           <div className={styles.grid}>
             {(capitalIdeas.length ? capitalIdeas : top).map((item) => (
               <article key={item.strategy + '-' + item.symbol} className={styles.card}>
@@ -94,6 +121,11 @@ export function MonitorRankingPanel() {
                   }>{movementLabel(item)}</em>
                 </div>
                 <div className={styles.title}><b>{item.symbol}</b><span>{item.strategy.toUpperCase()}</span></div>
+                <span className={
+                  resolvedSource(item) === 'PORTFOLIO' ? styles.sourcePortfolio
+                    : resolvedSource(item) === 'NEW_OPPORTUNITY' ? styles.sourceNew
+                      : styles.sourceWatchlist
+                }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>
                 <dl>
@@ -114,18 +146,6 @@ export function MonitorRankingPanel() {
               </article>
             ))}
           </div>
-
-          {managementPriorities.length ? <>
-            <div className={styles.sectionTitle}><div><span>GESTIÓN DE CARTERA</span><h2>Prioridades de riesgo y toma de ganancias</h2></div><small>No compiten con el ranking de nuevo capital</small></div>
-            <div className={styles.managementGrid}>
-              {managementPriorities.map((item) => <article key={`mgmt-${item.strategy}-${item.symbol}`} className={styles.managementCard}>
-                <div><b>{item.symbol}</b><span>{item.action.replaceAll('_',' ')}</span></div>
-                <strong>{item.adjustedScore}</strong>
-                <small>{item.signalPriorityLevel ?? '—'} · {item.marketRegime ?? '—'} · peso {item.currentWeightPercent.toFixed(1)}%</small>
-                {item.notes[0] ? <p>{item.notes[0]}</p> : null}
-              </article>)}
-            </div>
-          </> : null}
 
           <div className={styles.disclaimer}>
             <b>Cobertura analítica:</b> el ranking vivo no inventa correlación sectorial ni valoración cuando esos datos no están disponibles en el ciclo del monitor. Para asignación definitiva, usar el análisis completo de cartera.

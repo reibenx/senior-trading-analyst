@@ -178,13 +178,13 @@ export async function POST(request: Request) {
 
 
   let transversalRanking: TransversalRankingSnapshot | null = null;
-  if (opportunityStore && targets.length) {
+  if (opportunityStore && rankingTargets.length) {
     try {
       const previousTransversalRanking = await opportunityStore
         .getTransversalRanking(portfolioFingerprint)
         .catch(() => null);
       const grouped = new Map<Strategy, string[]>();
-      for (const target of targets) {
+      for (const target of rankingTargets) {
         const current = grouped.get(target.strategy) ?? [];
         current.push(target.symbol);
         grouped.set(target.strategy, current);
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
 
       transversalRanking = buildTransversalRanking({
         opportunities: accumulated,
-        totalSymbols: targets.length,
+        totalSymbols: rankingTargets.length,
         portfolioFingerprint,
         previousRanking: previousTransversalRanking,
         sourceBySymbol,
@@ -261,8 +261,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     scanned: scanTargets.length,
     batchStart: startIndex,
-    totalTargets: targets.length,
-    nextBatchWillRotate: Boolean(cursorStore && targets.length > scanTargets.length),
+    totalTargets: rankingTargets.length,
+    nextBatchWillRotate: Boolean(cursorStore && baseTargets.length > Math.max(0, scanTargets.length - scannerTargets.length)),
     marketProvider: marketProvider.id,
     portfolioPositions: positions.length,
     notificationProviders: providers.map((provider) => provider.id),

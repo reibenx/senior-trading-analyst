@@ -126,7 +126,7 @@ export const stopBreachRule: MonitorRule = {
       plan,
       'STOP_BREACH',
       `${plan.symbol} perdió el stop técnico`,
-      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.${riskProfileText(plan)}${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} <= stop ${plan.stop.toFixed(2)}. Revisar la tesis.${priorityText(plan)}${riskProfileText(plan)}${tradeLevels(plan)}`,
       'CRITICAL',
       `${plan.symbol}:STOP_BREACH:${plan.stop.toFixed(4)}`,
     );
@@ -144,7 +144,7 @@ export const targetHitRule: MonitorRule = {
       plan,
       'TARGET_HIT',
       `${plan.symbol} alcanzó TP${reachedIndex + 1}`,
-      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.${riskProfileText(plan)}${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} >= target ${target.toFixed(2)}. Evaluar toma parcial o trailing stop.${priorityText(plan)}${riskProfileText(plan)}${tradeLevels(plan)}`,
       'ACTION',
       `${plan.symbol}:TARGET_HIT:${reachedIndex + 1}:${target.toFixed(4)}`,
     );

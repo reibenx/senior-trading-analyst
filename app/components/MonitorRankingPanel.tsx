@@ -35,15 +35,19 @@ export function MonitorRankingPanel() {
 
   useEffect(() => { void refresh(); }, []);
 
-  const filteredItems = ranking?.items.filter((item) => sourceFilter === 'ALL' || item.source === sourceFilter) ?? [];
+  function resolvedSource(item: TransversalRankingSnapshot['items'][number]) {
+    return item.source ?? (item.currentWeightPercent > 0 ? 'PORTFOLIO' : 'WATCHLIST');
+  }
+
+  const filteredItems = ranking?.items.filter((item) => sourceFilter === 'ALL' || resolvedSource(item) === sourceFilter) ?? [];
   const top = filteredItems.slice(0, 5);
   const capitalIdeas = filteredItems.filter((item) => item.eligibleForNewCapital).slice(0, 5);
   const globalFirstEligible = ranking?.items.find((item) => item.eligibleForNewCapital);
-  const firstEligible = capitalIdeas[0];
 
   function sourceLabel(item: TransversalRankingSnapshot['items'][number]) {
-    if (item.source === 'PORTFOLIO') return 'EN CARTERA';
-    if (item.source === 'NEW_OPPORTUNITY') return 'NUEVA OPORTUNIDAD';
+    const source = resolvedSource(item);
+    if (source === 'PORTFOLIO') return 'EN CARTERA';
+    if (source === 'NEW_OPPORTUNITY') return 'NUEVA OPORTUNIDAD';
     return 'WATCHLIST';
   }
 
@@ -93,13 +97,13 @@ export function MonitorRankingPanel() {
               Todos <b>{ranking.items.length}</b>
             </button>
             <button type="button" className={sourceFilter === 'PORTFOLIO' ? styles.activeFilter : ''} onClick={() => setSourceFilter('PORTFOLIO')}>
-              En cartera <b>{ranking.sourceCounts?.portfolio ?? ranking.items.filter((item) => item.source === 'PORTFOLIO').length}</b>
+              En cartera <b>{ranking.sourceCounts?.portfolio ?? ranking.items.filter((item) => resolvedSource(item) === 'PORTFOLIO').length}</b>
             </button>
             <button type="button" className={sourceFilter === 'WATCHLIST' ? styles.activeFilter : ''} onClick={() => setSourceFilter('WATCHLIST')}>
-              Watchlist <b>{ranking.sourceCounts?.watchlist ?? ranking.items.filter((item) => item.source === 'WATCHLIST').length}</b>
+              Watchlist <b>{ranking.sourceCounts?.watchlist ?? ranking.items.filter((item) => resolvedSource(item) === 'WATCHLIST').length}</b>
             </button>
             <button type="button" className={sourceFilter === 'NEW_OPPORTUNITY' ? styles.activeFilter : ''} onClick={() => setSourceFilter('NEW_OPPORTUNITY')}>
-              Nuevas <b>{ranking.sourceCounts?.newOpportunities ?? ranking.items.filter((item) => item.source === 'NEW_OPPORTUNITY').length}</b>
+              Nuevas <b>{ranking.sourceCounts?.newOpportunities ?? ranking.items.filter((item) => resolvedSource(item) === 'NEW_OPPORTUNITY').length}</b>
             </button>
           </div>
 
@@ -118,8 +122,8 @@ export function MonitorRankingPanel() {
                 </div>
                 <div className={styles.title}><b>{item.symbol}</b><span>{item.strategy.toUpperCase()}</span></div>
                 <span className={
-                  item.source === 'PORTFOLIO' ? styles.sourcePortfolio
-                    : item.source === 'NEW_OPPORTUNITY' ? styles.sourceNew
+                  resolvedSource(item) === 'PORTFOLIO' ? styles.sourcePortfolio
+                    : resolvedSource(item) === 'NEW_OPPORTUNITY' ? styles.sourceNew
                       : styles.sourceWatchlist
                 }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>

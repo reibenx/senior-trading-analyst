@@ -4,6 +4,7 @@ import { getAlertPreferences, saveAlertPreferences } from '@/core/monitoring/pre
 
 const schema = z.object({
   minConviction: z.number().min(0).max(100),
+  minPriority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   strategies: z.array(z.enum(['day', 'swing', 'position'])).min(1),
   entryA: z.boolean(),
   entryB: z.boolean(),

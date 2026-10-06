@@ -1,8 +1,11 @@
 import type { AlertEvent, Decision, Strategy, TradePlan } from '@/core/domain/trading';
 import { getRedisRestConfig } from '@/core/persistence/redis-env';
 
+export type AlertPriorityThreshold = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
 export interface AlertPreferences {
   minConviction: number;
+  minPriority: AlertPriorityThreshold;
   strategies: Strategy[];
   entryA: boolean;
   entryB: boolean;
@@ -13,6 +16,7 @@ export interface AlertPreferences {
 
 export const DEFAULT_ALERT_PREFERENCES: AlertPreferences = {
   minConviction: 60,
+  minPriority: 'MEDIUM',
   strategies: ['day', 'swing', 'position'],
   entryA: true,
   entryB: true,
@@ -35,8 +39,15 @@ function normalizePreferences(value: Partial<AlertPreferences> | null | undefine
     ? value!.strategies.filter((item): item is Strategy => item === 'day' || item === 'swing' || item === 'position')
     : DEFAULT_ALERT_PREFERENCES.strategies;
 
+  const minPriority = value?.minPriority;
+  const normalizedPriority: AlertPriorityThreshold =
+    minPriority === 'LOW' || minPriority === 'MEDIUM' || minPriority === 'HIGH' || minPriority === 'CRITICAL'
+      ? minPriority
+      : DEFAULT_ALERT_PREFERENCES.minPriority;
+
   return {
     minConviction: Number.isFinite(minConviction) ? Math.max(0, Math.min(100, Math.round(minConviction))) : DEFAULT_ALERT_PREFERENCES.minConviction,
+    minPriority: normalizedPriority,
     strategies: strategies.length ? [...new Set(strategies)] : DEFAULT_ALERT_PREFERENCES.strategies,
     entryA: value?.entryA ?? DEFAULT_ALERT_PREFERENCES.entryA,
     entryB: value?.entryB ?? DEFAULT_ALERT_PREFERENCES.entryB,
@@ -87,6 +98,18 @@ export async function saveAlertPreferences(value: Partial<AlertPreferences>): Pr
   return preferences;
 }
 
+const PRIORITY_RANK: Record<AlertPriorityThreshold, number> = {
+  LOW: 0,
+  MEDIUM: 1,
+  HIGH: 2,
+  CRITICAL: 3,
+};
+
+function priorityPasses(plan: TradePlan, threshold: AlertPriorityThreshold): boolean {
+  const level = plan.signalPriority?.level ?? 'LOW';
+  return PRIORITY_RANK[level] >= PRIORITY_RANK[threshold];
+}
+
 function priceInside(price: number, zone: TradePlan['entryA'] | TradePlan['entryB']): boolean {
   return Boolean(zone && price >= zone.low && price <= zone.high);
 }
@@ -99,6 +122,7 @@ export function shouldNotifyAlert(plan: TradePlan, event: AlertEvent, preference
 
   if (event.type === 'ENTRY_ZONE') {
     if (plan.scores.conviction < preferences.minConviction) return false;
+    if (!priorityPasses(plan, preferences.minPriority)) return false;
     const inA = priceInside(plan.currentPrice, plan.entryA);
     const inB = priceInside(plan.currentPrice, plan.entryB);
     return (inA && preferences.entryA) || (inB && preferences.entryB);
@@ -106,6 +130,7 @@ export function shouldNotifyAlert(plan: TradePlan, event: AlertEvent, preference
 
   if (event.type === 'DECISION_SIGNAL') {
     if (plan.scores.conviction < preferences.minConviction) return false;
+    if (!priorityPasses(plan, preferences.minPriority)) return false;
     if (plan.decision === 'HOLD') return false;
     return preferences.decisions[plan.decision];
   }

@@ -123,6 +123,7 @@ export async function POST(request: Request) {
         decision: plan.decision,
         conviction: plan.scores.conviction,
         riskProfile: plan.riskProfile,
+        signalPriority: plan.signalPriority,
         events,
       });
     } catch (error) {

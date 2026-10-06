@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { PortfolioOpportunitySummary } from '@/core/domain/opportunity';
+import type { PortfolioOpportunitySummary, PortfolioRankingSnapshot } from '@/core/domain/opportunity';
 import type { Position, Strategy } from '@/core/domain/trading';
 import type { Timeframe } from '@/core/domain/market';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
@@ -105,6 +105,24 @@ export async function POST(request: Request) {
 
     opportunities.sort((a, b) => b.opportunityScore - a.opportunityScore);
     const portfolioValue = positions.reduce((sum, position) => sum + Math.max(0, position.marketValue ?? 0), 0);
+
+    if (store && opportunities.length) {
+      const rankingSnapshot: PortfolioRankingSnapshot = {
+        generatedAt: new Date().toISOString(),
+        strategy: payload.strategy,
+        portfolioFingerprint,
+        items: opportunities.map((item, index) => ({
+          rank: index + 1,
+          symbol: item.symbol,
+          opportunityScore: item.opportunityScore,
+          action: item.action,
+          signalPriorityLevel: item.signalPriorityLevel,
+          marketRegime: item.marketRegime,
+          currentWeightPercent: item.currentWeightPercent,
+        })),
+      };
+      await store.setLatestRanking(rankingSnapshot, ttlSeconds).catch(() => undefined);
+    }
 
     const summary: PortfolioOpportunitySummary = {
       generatedAt: new Date().toISOString(),

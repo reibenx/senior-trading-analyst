@@ -38,9 +38,7 @@ export function MonitorRankingPanel() {
   const filteredItems = ranking?.items.filter((item) => sourceFilter === 'ALL' || item.source === sourceFilter) ?? [];
   const top = filteredItems.slice(0, 5);
   const capitalIdeas = filteredItems.filter((item) => item.eligibleForNewCapital).slice(0, 5);
-  const managementPriorities = ranking?.items
-    .filter((item) => !item.eligibleForNewCapital && (item.action === 'REDUCIR' || item.action === 'TOMAR_GANANCIAS' || item.action === 'REVISAR_TESIS'))
-    .slice(0, 5) ?? [];
+  const globalFirstEligible = ranking?.items.find((item) => item.eligibleForNewCapital);
   const firstEligible = capitalIdeas[0];
 
   function sourceLabel(item: TransversalRankingSnapshot['items'][number]) {
@@ -80,7 +78,7 @@ export function MonitorRankingPanel() {
             <div><span>Cobertura</span><b>{ranking.coveragePercent}%</b><small>{ranking.coveredSymbols}/{ranking.totalSymbols} símbolos</small></div>
             <div>
               <span>#1 nuevo capital</span>
-              <b>{firstEligible?.symbol ?? '—'}</b>
+              <b>{globalFirstEligible?.symbol ?? '—'}</b>
               <small>
                 {ranking.leaderChange?.changed
                   ? `CAMBIO: ${ranking.leaderChange.previousSymbol ?? '—'} → ${ranking.leaderChange.currentSymbol ?? '—'}`
@@ -105,7 +103,7 @@ export function MonitorRankingPanel() {
             </button>
           </div>
 
-          <div className={styles.sectionTitle}><div><span>NUEVO CAPITAL</span><h2>Mejores candidatos elegibles</h2></div><small>Ordenados por score ajustado, concentración y contexto</small></div>
+          <div className={styles.sectionTitle}><div><span>NUEVO CAPITAL</span><h2>Mejores candidatos elegibles</h2></div><small>{sourceFilter === 'ALL' ? 'Universo completo' : `Filtro: ${sourceFilter.replaceAll('_', ' ')}`} · ordenados por score ajustado</small></div>
           <div className={styles.grid}>
             {(capitalIdeas.length ? capitalIdeas : top).map((item) => (
               <article key={item.strategy + '-' + item.symbol} className={styles.card}>
@@ -144,18 +142,6 @@ export function MonitorRankingPanel() {
               </article>
             ))}
           </div>
-
-          {managementPriorities.length ? <>
-            <div className={styles.sectionTitle}><div><span>GESTIÓN DE CARTERA</span><h2>Prioridades de riesgo y toma de ganancias</h2></div><small>No compiten con el ranking de nuevo capital</small></div>
-            <div className={styles.managementGrid}>
-              {managementPriorities.map((item) => <article key={`mgmt-${item.strategy}-${item.symbol}`} className={styles.managementCard}>
-                <div><b>{item.symbol}</b><span>{item.action.replaceAll('_',' ')}</span></div>
-                <strong>{item.adjustedScore}</strong>
-                <small>{item.signalPriorityLevel ?? '—'} · {item.marketRegime ?? '—'} · peso {item.currentWeightPercent.toFixed(1)}%</small>
-                {item.notes[0] ? <p>{item.notes[0]}</p> : null}
-              </article>)}
-            </div>
-          </> : null}
 
           <div className={styles.disclaimer}>
             <b>Cobertura analítica:</b> el ranking vivo no inventa correlación sectorial ni valoración cuando esos datos no están disponibles en el ciclo del monitor. Para asignación definitiva, usar el análisis completo de cartera.

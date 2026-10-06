@@ -4,6 +4,7 @@ interface Input {
   opportunities: PortfolioOpportunity[];
   totalSymbols: number;
   portfolioFingerprint: string;
+  previousRanking?: TransversalRankingSnapshot | null;
 }
 
 function dataQuality(item: PortfolioOpportunity): 'FULL' | 'PARTIAL' | 'LIMITED' {
@@ -71,14 +72,44 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       };
     })
     .sort((a, b) => b.adjustedScore - a.adjustedScore)
-    .map((item, index) => ({ ...item, rank: index + 1 }));
+    .map((item, index) => {
+      const rank = index + 1;
+      const previous = input.previousRanking?.items.find(
+        (candidate) => candidate.symbol === item.symbol && candidate.strategy === item.strategy,
+      );
+      const rankChange = previous ? previous.rank - rank : undefined;
+      const movement = !previous
+        ? 'NEW' as const
+        : rankChange === 0
+          ? 'UNCHANGED' as const
+          : rankChange && rankChange > 0
+            ? 'UP' as const
+            : 'DOWN' as const;
+
+      return {
+        ...item,
+        rank,
+        previousRank: previous?.rank,
+        rankChange,
+        movement,
+      };
+    });
 
   const coveredSymbols = ranked.length;
   const coveragePercent = input.totalSymbols > 0 ? Math.round((coveredSymbols / input.totalSymbols) * 100) : 0;
+  const previousLeader = input.previousRanking?.items.find((item) => item.eligibleForNewCapital)?.symbol;
+  const currentLeader = ranked.find((item) => item.eligibleForNewCapital)?.symbol;
+  const leaderChange = {
+    changed: Boolean(input.previousRanking && previousLeader !== currentLeader),
+    previousSymbol: previousLeader,
+    currentSymbol: currentLeader,
+  };
 
   return {
     generatedAt: new Date().toISOString(),
+    previousGeneratedAt: input.previousRanking?.generatedAt,
     portfolioFingerprint: input.portfolioFingerprint,
+    leaderChange,
     coveredSymbols,
     totalSymbols: input.totalSymbols,
     coveragePercent,

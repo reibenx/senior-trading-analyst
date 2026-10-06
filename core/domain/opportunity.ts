@@ -102,8 +102,13 @@ export interface PortfolioRankingSnapshot {
   items: PortfolioRankingSnapshotItem[];
 }
 
+export type RankingMovement = 'NEW' | 'UP' | 'DOWN' | 'UNCHANGED';
+
 export interface TransversalRankingItem {
   rank: number;
+  previousRank?: number;
+  rankChange?: number;
+  movement: RankingMovement;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;
@@ -122,9 +127,17 @@ export interface TransversalRankingItem {
   notes: string[];
 }
 
+export interface TransversalRankingLeaderChange {
+  changed: boolean;
+  previousSymbol?: string;
+  currentSymbol?: string;
+}
+
 export interface TransversalRankingSnapshot {
   generatedAt: string;
+  previousGeneratedAt?: string;
   portfolioFingerprint: string;
+  leaderChange: TransversalRankingLeaderChange;
   coveredSymbols: number;
   totalSymbols: number;
   coveragePercent: number;

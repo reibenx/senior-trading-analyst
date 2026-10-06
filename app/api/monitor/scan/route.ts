@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import type { Strategy } from '@/core/domain/trading';
-import type { PortfolioOpportunity } from '@/core/domain/opportunity';
+import type { AlertEvent, Strategy } from '@/core/domain/trading';
+import type { PortfolioOpportunity, TransversalRankingSnapshot } from '@/core/domain/opportunity';
 import type { Timeframe } from '@/core/domain/market';
 import { MonitoringAgent } from '@/core/monitoring/agent';
 import { defaultMonitorRules } from '@/core/monitoring/rules';
@@ -14,6 +14,7 @@ import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
+import { appendActivity } from '@/core/persistence/activity-store';
 import {
   buildPortfolioFingerprint,
   getPortfolioOpportunityStore,
@@ -161,9 +162,12 @@ export async function POST(request: Request) {
   }
 
 
-  let transversalRanking = null;
+  let transversalRanking: TransversalRankingSnapshot | null = null;
   if (opportunityStore && targets.length) {
     try {
+      const previousTransversalRanking = await opportunityStore
+        .getTransversalRanking(portfolioFingerprint)
+        .catch(() => null);
       const grouped = new Map<Strategy, string[]>();
       for (const target of targets) {
         const current = grouped.get(target.strategy) ?? [];
@@ -181,6 +185,7 @@ export async function POST(request: Request) {
         opportunities: accumulated,
         totalSymbols: targets.length,
         portfolioFingerprint,
+        previousRanking: previousTransversalRanking,
       });
 
       const rankingTtlSeconds = Math.max(
@@ -188,6 +193,49 @@ export async function POST(request: Request) {
         ...[...grouped.keys()].map((strategy) => portfolioOpportunityTtlSeconds(strategy)),
       );
       await opportunityStore.setTransversalRanking(transversalRanking, rankingTtlSeconds).catch(() => undefined);
+
+      if (transversalRanking.leaderChange.changed && transversalRanking.leaderChange.currentSymbol) {
+        const leader = transversalRanking.items.find(
+          (item) => item.symbol === transversalRanking?.leaderChange.currentSymbol,
+        );
+        const previousSymbol = transversalRanking.leaderChange.previousSymbol;
+        const currentSymbol = transversalRanking.leaderChange.currentSymbol;
+        const event: AlertEvent = {
+          id: `new-capital-leader:${previousSymbol ?? 'none'}:${currentSymbol}:${transversalRanking.generatedAt}`,
+          symbol: currentSymbol,
+          severity: 'OPPORTUNITY',
+          type: 'NEW_CAPITAL_LEADER_CHANGED',
+          title: 'Cambió el #1 para nuevo capital',
+          message: `${previousSymbol ?? '—'} → ${currentSymbol}${leader ? ` · score ajustado ${leader.adjustedScore}/100` : ''}`,
+          createdAt: transversalRanking.generatedAt,
+          metadata: {
+            dedupKey: `new-capital-leader:${previousSymbol ?? 'none'}:${currentSymbol}`,
+            previousSymbol,
+            currentSymbol,
+            adjustedScore: leader?.adjustedScore,
+            action: leader?.action,
+            movement: leader?.movement,
+            rankChange: leader?.rankChange,
+          },
+        };
+
+        const acquired = stateStore
+          ? await stateStore.acquire(event, alertTtlSeconds()).catch(() => true)
+          : true;
+
+        if (acquired) {
+          await Promise.allSettled(providers.map((provider) => provider.send(event)));
+          await appendActivity({
+            kind: 'SIGNAL',
+            symbol: currentSymbol,
+            title: event.title,
+            detail: event.message,
+            severity: event.severity,
+            metadata: event.metadata,
+            createdAt: event.createdAt,
+          }).catch(() => undefined);
+        }
+      }
     } catch {
       transversalRanking = null;
     }

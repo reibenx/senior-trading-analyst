@@ -39,6 +39,12 @@ export function MonitorRankingPanel() {
     .slice(0, 5) ?? [];
   const firstEligible = capitalIdeas[0];
 
+  function movementLabel(item: TransversalRankingSnapshot['items'][number]) {
+    if (item.movement === 'NEW') return 'NUEVO';
+    if (item.movement === 'UNCHANGED' || !item.rankChange) return '—';
+    return item.rankChange > 0 ? `↑${item.rankChange}` : `↓${Math.abs(item.rankChange)}`;
+  }
+
   return (
     <section className={styles.shell}>
       <div className={styles.head}>
@@ -62,7 +68,15 @@ export function MonitorRankingPanel() {
         <>
           <div className={styles.summary}>
             <div><span>Cobertura</span><b>{ranking.coveragePercent}%</b><small>{ranking.coveredSymbols}/{ranking.totalSymbols} símbolos</small></div>
-            <div><span>#1 nuevo capital</span><b>{firstEligible?.symbol ?? '—'}</b><small>según score ajustado</small></div>
+            <div>
+              <span>#1 nuevo capital</span>
+              <b>{firstEligible?.symbol ?? '—'}</b>
+              <small>
+                {ranking.leaderChange?.changed
+                  ? `CAMBIO: ${ranking.leaderChange.previousSymbol ?? '—'} → ${ranking.leaderChange.currentSymbol ?? '—'}`
+                  : 'sin cambio de líder'}
+              </small>
+            </div>
             <div><span>Actualizado</span><b>{new Date(ranking.generatedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</b><small>{new Date(ranking.generatedAt).toLocaleDateString('es-AR')}</small></div>
           </div>
 
@@ -70,7 +84,15 @@ export function MonitorRankingPanel() {
           <div className={styles.grid}>
             {(capitalIdeas.length ? capitalIdeas : top).map((item) => (
               <article key={item.strategy + '-' + item.symbol} className={styles.card}>
-                <div className={styles.rank}>#{item.rank}</div>
+                <div className={styles.rank}>
+                  <span>#{item.rank}</span>
+                  <em className={
+                    item.movement === 'UP' ? styles.up
+                      : item.movement === 'DOWN' ? styles.down
+                        : item.movement === 'NEW' ? styles.new
+                          : styles.flat
+                  }>{movementLabel(item)}</em>
+                </div>
                 <div className={styles.title}><b>{item.symbol}</b><span>{item.strategy.toUpperCase()}</span></div>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>

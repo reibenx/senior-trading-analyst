@@ -94,6 +94,63 @@ describe('transversal ranking', () => {
     expect(ranking.coveragePercent).toBe(40);
   });
 
+  it('tracks rank movement against the previous snapshot', () => {
+    const first = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 82 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 72 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+    });
+
+    const second = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 74 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 90 }),
+        opportunity({ symbol: 'CCC', opportunityScore: 76 }),
+      ],
+      totalSymbols: 3,
+      portfolioFingerprint: 'abc',
+      previousRanking: first,
+    });
+
+    const aaa = second.items.find((item) => item.symbol === 'AAA');
+    const bbb = second.items.find((item) => item.symbol === 'BBB');
+    const ccc = second.items.find((item) => item.symbol === 'CCC');
+
+    expect(bbb?.movement).toBe('UP');
+    expect(bbb?.rankChange).toBe(1);
+    expect(aaa?.movement).toBe('DOWN');
+    expect(aaa?.rankChange).toBe(-2);
+    expect(ccc?.movement).toBe('NEW');
+  });
+
+  it('detects a change in the #1 eligible asset for new capital', () => {
+    const first = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 86 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 78 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+    });
+
+    const second = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA', opportunityScore: 75 }),
+        opportunity({ symbol: 'BBB', opportunityScore: 92 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+      previousRanking: first,
+    });
+
+    expect(second.leaderChange.changed).toBe(true);
+    expect(second.leaderChange.previousSymbol).toBe('AAA');
+    expect(second.leaderChange.currentSymbol).toBe('BBB');
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

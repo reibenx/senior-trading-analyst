@@ -29,6 +29,25 @@ function formatMoney(value: number) {
   return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(value);
 }
 
+function scoreDrivers(item: PortfolioOpportunitySummary['opportunities'][number]) {
+  const b = item.scoreBreakdown;
+  if (!b) return 'Desglose no disponible';
+  const positive = [
+    ['Conv.', b.conviction],
+    ['Prior.', b.signalPriority],
+    ['Fit', b.portfolioFit],
+    ['Val.', b.valuation],
+    ['Entrada', b.entryProximity],
+    ['Merc.', b.market],
+  ].map(([label, value]) => `${label} +${Number(value).toFixed(1)}`).join(' · ');
+  const adjustments = [
+    b.regimeAdjustment ? `Régimen ${b.regimeAdjustment > 0 ? '+' : ''}${b.regimeAdjustment}` : null,
+    b.contextAdjustment ? `Contexto ${b.contextAdjustment > 0 ? '+' : ''}${b.contextAdjustment}` : null,
+    b.concentrationPenalty ? `Concentración -${b.concentrationPenalty}` : null,
+  ].filter(Boolean).join(' · ');
+  return adjustments ? `${positive} · ${adjustments}` : positive;
+}
+
 export function PortfolioDashboard() {
   const [strategy, setStrategy] = useState<Strategy>('position');
   const [maxSymbols, setMaxSymbols] = useState(25);
@@ -334,6 +353,7 @@ export function PortfolioDashboard() {
                     <p>Entry {item.preferredEntry ?? '—'} <b>{item.entryLow !== undefined && item.entryHigh !== undefined ? `${item.entryLow.toFixed(2)}–${item.entryHigh.toFixed(2)}` : '—'}</b></p>
                     <p>Prioridad <b>{item.signalPriorityLevel ?? '—'} {item.signalPriorityScore ?? '—'}/100</b> · Régimen <b>{item.marketRegime ?? '—'}</b></p>
                     <p>Stop <b>{item.stop?.toFixed(2) ?? '—'}</b> · TP1 <b>{item.target?.toFixed(2) ?? '—'}</b></p>
+                    <small className="scoreDrivers">{scoreDrivers(item)}</small>
                     {item.thesis[0] ? <p className="cardReason">{item.thesis[0]}</p> : null}
                     {item.risks[0] ? <p className="cardRisk">⚠ {item.risks[0]}</p> : null}
                   </article>

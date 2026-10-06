@@ -79,6 +79,21 @@ describe('transversal ranking', () => {
     expect(ranking.items.find((item) => item.symbol === 'HIGH')?.eligibleForNewCapital).toBe(false);
   });
 
+  it('reports partial coverage without pretending the universe is complete', () => {
+    const ranking = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'AAA' }),
+        opportunity({ symbol: 'BBB' }),
+      ],
+      totalSymbols: 5,
+      portfolioFingerprint: 'abc',
+    });
+
+    expect(ranking.coveredSymbols).toBe(2);
+    expect(ranking.totalSymbols).toBe(5);
+    expect(ranking.coveragePercent).toBe(40);
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

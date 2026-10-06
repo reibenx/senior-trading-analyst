@@ -174,8 +174,26 @@ export function PortfolioDashboard() {
               <div className="panel metricCard"><span>Activos analizados</span><strong>{data.analyzed}</strong></div>
               <div className="panel metricCard"><span>Sin resolver</span><strong>{data.failed}</strong></div>
               <div className="panel metricCard"><span>Valor cartera</span><strong>{formatMoney(data.portfolioValue)}</strong><small>moneda del bridge</small></div>
-              <div className="panel metricCard"><span>Estrategia</span><strong>{data.strategy.toUpperCase()}</strong></div>
+              <div className="panel metricCard"><span>#1 nuevo capital</span><strong>{data.opportunities[0]?.symbol ?? '—'}</strong><small>{data.opportunities[0] ? `${data.opportunities[0].opportunityScore}/100 · ${data.opportunities[0].signalPriorityLevel ?? 'N/D'}` : 'sin ranking'}</small></div>
             </div>
+            {data.opportunities.length ? (
+              <section className="panel seniorRankingPanel">
+                <div className="portfolioTitle">
+                  <div><span className="eyebrow">RANKING SENIOR · CAPITAL MARGINAL</span><h1>Mejores destinos para el próximo aporte</h1></div>
+                  <small>Prioriza señal, régimen, portfolio fit, valuación, proximidad a entrada y concentración actual.</small>
+                </div>
+                <div className="seniorPodium">
+                  {data.opportunities.slice(0,3).map((item,index) => (
+                    <article key={item.symbol} className={`seniorPodiumCard seniorPodium-${index+1}`}>
+                      <span>#{index+1}</span><h2>{item.symbol}</h2><strong>{item.opportunityScore}</strong>
+                      <p>{item.action.replaceAll('_',' ')}</p>
+                      <small>Prioridad {item.signalPriorityLevel ?? 'N/D'} · {item.signalPriorityScore ?? '—'}/100</small>
+                      <small>Régimen {item.marketRegime ?? 'N/D'} · Entry {item.preferredEntry ?? '—'}</small>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {data.allocationPlan ? (
               <section className="panel allocationPanel">
@@ -192,7 +210,7 @@ export function PortfolioDashboard() {
                     <article className="allocationCard" key={item.symbol}>
                       <div><b>{item.symbol}</b><strong>{item.allocationPercent.toFixed(1)}%</strong></div>
                       <h2>USD {formatMoney(item.allocationAmount)}</h2>
-                      <p>Opportunity {item.opportunityScore}/100 · peso actual {item.currentWeightPercent.toFixed(1)}%</p>
+                      <p>Opportunity {item.opportunityScore}/100 · prioridad {data.opportunities.find((opportunity)=>opportunity.symbol===item.symbol)?.signalPriorityLevel ?? 'N/D'} · peso actual {item.currentWeightPercent.toFixed(1)}%</p>
                       <small>{item.rationale}</small>
                     </article>
                   ))}
@@ -277,11 +295,11 @@ export function PortfolioDashboard() {
             <section className="panel portfolioTablePanel">
               <div className="portfolioTitle">
                 <div><span className="eyebrow">RANKING</span><h1>Oportunidades de asignación</h1></div>
-                <small>Mayor score = mejor combinación de convicción, portfolio fit, valuación y proximidad a entrada.</small>
+                <small>Mayor score = mejor combinación de prioridad de señal, régimen, convicción, portfolio fit, valuación, entrada y concentración.</small>
               </div>
               <div className="portfolioTableWrap">
                 <table className="portfolioTable">
-                  <thead><tr><th>#</th><th>Ticker</th><th>Acción</th><th>Score</th><th>Peso</th><th>Dist. Entry</th><th>Convicción</th><th>Técnico</th><th>Fund.</th><th>Val.</th><th>Mercado</th></tr></thead>
+                  <thead><tr><th>#</th><th>Ticker</th><th>Acción</th><th>Score</th><th>Prioridad</th><th>Régimen</th><th>Entry</th><th>Peso</th><th>Dist. Entry</th><th>Convicción</th><th>Técnico</th><th>Fund.</th><th>Val.</th><th>Mercado</th></tr></thead>
                   <tbody>
                     {data.opportunities.map((item, index) => (
                       <tr key={item.symbol}>
@@ -289,6 +307,9 @@ export function PortfolioDashboard() {
                         <td><b>{item.symbol}</b><small>{item.currentPrice.toFixed(2)}</small></td>
                         <td><span className={`actionBadge action-${item.action.toLowerCase()}`}>{actionLabel(item.action)}</span></td>
                         <td><strong className="opportunityScore">{item.opportunityScore}</strong></td>
+                        <td><b>{item.signalPriorityLevel ?? '—'}</b><small>{item.signalPriorityScore ?? '—'}/100</small></td>
+                        <td>{item.marketRegime ?? '—'}<small>{item.contextCoverage ?? '—'}</small></td>
+                        <td>{item.preferredEntry ? `Zona ${item.preferredEntry}` : '—'}</td>
                         <td>{item.currentWeightPercent.toFixed(1)}%</td>
                         <td>{item.distanceToEntryPercent === undefined ? '—' : `${item.distanceToEntryPercent > 0 ? '+' : ''}${item.distanceToEntryPercent.toFixed(1)}%`}</td>
                         <td>{item.scores.conviction}</td>
@@ -310,7 +331,8 @@ export function PortfolioDashboard() {
                     <div><span className="eyebrow">#{data.opportunities.indexOf(item) + 1} · {item.action.replaceAll('_', ' ')}</span><h2>{item.symbol}</h2></div>
                     <strong className="bigScore">{item.opportunityScore}</strong>
                     <p>Precio <b>{item.currentPrice.toFixed(2)}</b> · Peso <b>{item.currentWeightPercent.toFixed(1)}%</b></p>
-                    <p>Entry A <b>{item.entryLow !== undefined && item.entryHigh !== undefined ? `${item.entryLow.toFixed(2)}–${item.entryHigh.toFixed(2)}` : '—'}</b></p>
+                    <p>Entry {item.preferredEntry ?? '—'} <b>{item.entryLow !== undefined && item.entryHigh !== undefined ? `${item.entryLow.toFixed(2)}–${item.entryHigh.toFixed(2)}` : '—'}</b></p>
+                    <p>Prioridad <b>{item.signalPriorityLevel ?? '—'} {item.signalPriorityScore ?? '—'}/100</b> · Régimen <b>{item.marketRegime ?? '—'}</b></p>
                     <p>Stop <b>{item.stop?.toFixed(2) ?? '—'}</b> · TP1 <b>{item.target?.toFixed(2) ?? '—'}</b></p>
                     {item.thesis[0] ? <p className="cardReason">{item.thesis[0]}</p> : null}
                     {item.risks[0] ? <p className="cardRisk">⚠ {item.risks[0]}</p> : null}

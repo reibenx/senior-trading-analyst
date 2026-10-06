@@ -18,6 +18,13 @@ function plan(decision: TradePlan['decision']): TradePlan {
     },
     currentPrice: 100,
     targets: [110, 120],
+    signalPriority: {
+      score: 78,
+      level: 'HIGH',
+      marketRegime: 'RISK_ON',
+      contextCoverage: 'BENCHMARK_ONLY',
+      reasons: [],
+    },
     riskProfile: {
       label: 'Position · amplio',
       riskPercent: 1.25,
@@ -50,6 +57,8 @@ describe('decisionSignalRule', () => {
     expect(alert?.title).toContain('AUMENTAR');
     expect(alert?.message).toContain('Position · amplio');
     expect(alert?.message).toContain('trailing 3.5 ATR');
+    expect(alert?.message).toContain('Prioridad HIGH');
+    expect(alert?.message).toContain('régimen RISK_ON');
   });
 
   it('emits a critical alert for EXIT', () => {

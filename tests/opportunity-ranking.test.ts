@@ -59,6 +59,18 @@ describe('senior portfolio opportunity ranking', () => {
     expect(riskOn.opportunityScore).toBeGreaterThan(defensive.opportunityScore);
     expect(riskOn.action).toBe('AUMENTAR');
     expect(defensive.action).toBe('MANTENER');
+    expect(riskOn.scoreBreakdown).toBeDefined();
+    const breakdown = riskOn.scoreBreakdown!;
+    const recomposed = breakdown.conviction
+      + breakdown.signalPriority
+      + breakdown.portfolioFit
+      + breakdown.valuation
+      + breakdown.entryProximity
+      + breakdown.market
+      + breakdown.regimeAdjustment
+      + breakdown.contextAdjustment
+      - breakdown.concentrationPenalty;
+    expect(riskOn.opportunityScore).toBe(Math.round(Math.max(0, Math.min(100, recomposed))));
   });
 
   it('uses preferred Entry B for position ranking distance', () => {

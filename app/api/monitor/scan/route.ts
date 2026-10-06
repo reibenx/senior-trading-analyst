@@ -14,6 +14,14 @@ import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
+import { buildTechnicalSnapshot } from '@/core/engines/technical';
+import {
+  marketScannerBatchSize,
+  marketScannerEnabled,
+  marketScannerThreshold,
+  parseScannerUniverse,
+  preScoreTechnicalCandidate,
+} from '@/core/monitoring/market-scanner';
 import { appendActivity } from '@/core/persistence/activity-store';
 import {
   buildPortfolioFingerprint,
@@ -30,6 +38,7 @@ const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
 interface ScanTarget {
   symbol: string;
   strategy: Strategy;
+  source?: 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER';
 }
 
 function authorized(request: Request): boolean {
@@ -53,7 +62,7 @@ function parseWatchlist(): ScanTarget[] {
     .filter(Boolean)
     .map((item) => {
       const [symbol, strategy] = item.split(':').map((part) => part.trim());
-      return { symbol: symbol.toUpperCase(), strategy: parseStrategy(strategy) };
+      return { symbol: symbol.toUpperCase(), strategy: parseStrategy(strategy), source: 'WATCHLIST' as const };
     })
     .filter((item) => item.symbol.length > 0);
 }
@@ -96,7 +105,7 @@ export async function POST(request: Request) {
   const portfolioTargets = positions
     .filter((position) => position.quantity > 0)
     .sort((a, b) => Math.max(0, b.marketValue ?? 0) - Math.max(0, a.marketValue ?? 0))
-    .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy }));
+    .map((position) => ({ symbol: position.symbol.toUpperCase(), strategy: portfolioStrategy, source: 'PORTFOLIO' as const }));
 
   const watchlistTargets = parseWatchlist();
   const targets = dedupeTargets([...watchlistTargets, ...portfolioTargets]);
@@ -265,6 +274,7 @@ export async function POST(request: Request) {
       strategy: rankingSnapshot.strategy,
       top3: rankingSnapshot.items.slice(0, 3),
     } : null,
+    scanner: scannerSummary,
     transversalRanking,
     results,
   });

@@ -17,6 +17,25 @@ const scoreSchema = z.object({
   conviction: z.number(),
 });
 
+const riskProfileSchema = z.object({
+  label: z.string(),
+  riskPercent: z.number(),
+  maxPositionPercent: z.number(),
+  trailingAtr: z.number(),
+  tp1Percent: z.number(),
+  tp2Percent: z.number(),
+  runnerPercent: z.number(),
+  preferredEntry: z.enum(['A', 'B']),
+});
+
+const signalPrioritySchema = z.object({
+  score: z.number().min(0).max(100),
+  level: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+  marketRegime: z.enum(['RISK_ON', 'MIXED', 'DEFENSIVE', 'UNKNOWN']),
+  contextCoverage: z.enum(['FULL', 'BENCHMARK_ONLY', 'NONE']),
+  reasons: z.array(z.string()),
+});
+
 const planSchema = z.object({
   symbol: z.string().min(1).max(20),
   strategy: z.enum(['day', 'swing', 'position']),
@@ -31,6 +50,8 @@ const planSchema = z.object({
   targets: z.array(z.number()),
   riskReward: z.number().optional(),
   positionSize: z.number().optional(),
+  riskProfile: riskProfileSchema.optional(),
+  signalPriority: signalPrioritySchema.optional(),
   thesis: z.array(z.string()),
   risks: z.array(z.string()),
   invalidationConditions: z.array(z.string()),

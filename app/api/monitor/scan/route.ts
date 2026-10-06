@@ -13,6 +13,13 @@ import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
+import {
+  buildPortfolioFingerprint,
+  getPortfolioOpportunityStore,
+  portfolioOpportunityTtlSeconds,
+} from '@/core/persistence/portfolio-opportunity-store';
+import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
+import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
 import { buildPortfolioFingerprint, getPortfolioOpportunityStore, portfolioOpportunityTtlSeconds } from '@/core/persistence/portfolio-opportunity-store';
 
 const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
@@ -103,6 +110,8 @@ export async function POST(request: Request) {
 
   const providers = getNotificationProviders();
   const stateStore = getAlertStateStore();
+  const opportunityStore = getPortfolioOpportunityStore();
+  const portfolioFingerprint = buildPortfolioFingerprint(positions);
   const { preferences: alertPreferences, persistent: persistentAlertPreferences } = await getAlertPreferences().catch(() => ({ preferences: undefined, persistent: false }));
   const agent = new MonitoringAgent(defaultMonitorRules, providers, stateStore, alertTtlSeconds(), alertPreferences ? ((plan, event) => shouldNotifyAlert(plan, event, alertPreferences)) : undefined);
   const results: Array<Record<string, unknown>> = [];
@@ -183,6 +192,38 @@ export async function POST(request: Request) {
         60,
       );
       await opportunityStore.setTransversalRanking(transversalRanking, ttl).catch(() => undefined);
+    } catch {
+      transversalRanking = null;
+    }
+  }
+
+  let transversalRanking = null;
+  if (opportunityStore && targets.length) {
+    try {
+      const grouped = new Map<Strategy, string[]>();
+      for (const target of targets) {
+        const current = grouped.get(target.strategy) ?? [];
+        current.push(target.symbol);
+        grouped.set(target.strategy, current);
+      }
+
+      const accumulated = [];
+      for (const [strategy, symbols] of grouped) {
+        const cached = await opportunityStore.getMany(strategy, portfolioFingerprint, [...new Set(symbols)]);
+        accumulated.push(...cached.values());
+      }
+
+      transversalRanking = buildTransversalRanking({
+        opportunities: accumulated,
+        totalSymbols: targets.length,
+        portfolioFingerprint,
+      });
+
+      const rankingTtlSeconds = Math.max(
+        30 * 60,
+        ...[...grouped.keys()].map((strategy) => portfolioOpportunityTtlSeconds(strategy)),
+      );
+      await opportunityStore.setTransversalRanking(transversalRanking, rankingTtlSeconds).catch(() => undefined);
     } catch {
       transversalRanking = null;
     }

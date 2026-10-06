@@ -36,6 +36,12 @@ function riskProfileText(plan: TradePlan): string {
   return ` Perfil ${profile.label}: riesgo ${profile.riskPercent}% · máx. posición ${profile.maxPositionPercent}% · entrada ${profile.preferredEntry} · trailing ${profile.trailingAtr} ATR · salidas ${profile.tp1Percent}%/${profile.tp2Percent}%/${profile.runnerPercent}%.`;
 }
 
+function priorityText(plan: TradePlan): string {
+  const priority = plan.signalPriority;
+  if (!priority) return '';
+  return ` Prioridad ${priority.level} (${priority.score}/100) · régimen ${priority.marketRegime} · contexto ${priority.contextCoverage}.`;
+}
+
 function tradeLevels(plan: TradePlan): string {
   const parts = [
     fmtZone('Entry A', plan.entryA),
@@ -88,7 +94,7 @@ export const decisionSignalRule: MonitorRule = {
       plan,
       'DECISION_SIGNAL',
       `${plan.symbol} · ${signal.label}`,
-      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}${riskProfileText(plan)}${tradeLevels(plan)}`,
+      `Convicción ${plan.scores.conviction}/100 · Precio ${plan.currentPrice.toFixed(2)}. ${signal.guidance}${priorityText(plan)}${riskProfileText(plan)}${tradeLevels(plan)}`,
       signal.severity,
       `${plan.symbol}:DECISION_SIGNAL:${plan.decision}:${convictionBucket}`,
     );
@@ -105,7 +111,7 @@ export const entryZoneRule: MonitorRule = {
       plan,
       'ENTRY_ZONE',
       `${plan.symbol} entró en zona de entrada`,
-      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.${riskProfileText(plan)}${tradeLevels(plan)}`,
+      `Precio ${plan.currentPrice.toFixed(2)} dentro de ${active.low.toFixed(2)}–${active.high.toFixed(2)}.${priorityText(plan)}${riskProfileText(plan)}${tradeLevels(plan)}`,
       'OPPORTUNITY',
       `${plan.symbol}:ENTRY_ZONE:${active.low.toFixed(4)}:${active.high.toFixed(4)}`,
     );

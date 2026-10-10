@@ -239,6 +239,45 @@ describe('transversal ranking', () => {
     expect(second.items[0].discoveryScore).toBe(79);
   });
 
+  it('applies the thesis 2027 strategic overlay to ranking priority', () => {
+    const ranking = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'TSM', opportunityScore: 72, currentWeightPercent: 0 }),
+        opportunity({ symbol: 'XYZ', opportunityScore: 72, currentWeightPercent: 0 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+    });
+
+    const tsm = ranking.items.find((item) => item.symbol === 'TSM');
+    const xyz = ranking.items.find((item) => item.symbol === 'XYZ');
+
+    expect(tsm?.thesis2027Stance).toBe('PRIORITY_ACCUMULATE');
+    expect(tsm?.thesis2027Adjustment).toBe(8);
+    expect(tsm?.adjustedScore).toBe((xyz?.adjustedScore ?? 0) + 8);
+    expect(ranking.items[0].symbol).toBe('TSM');
+  });
+
+  it('blocks incremental capital when the thesis stance is HOLD or DO_NOT_ADD', () => {
+    const ranking = buildTransversalRanking({
+      opportunities: [
+        opportunity({ symbol: 'VST', opportunityScore: 90, currentWeightPercent: 0 }),
+        opportunity({ symbol: 'SNDK', opportunityScore: 90, currentWeightPercent: 0 }),
+      ],
+      totalSymbols: 2,
+      portfolioFingerprint: 'abc',
+    });
+
+    const vst = ranking.items.find((item) => item.symbol === 'VST');
+    const sndk = ranking.items.find((item) => item.symbol === 'SNDK');
+
+    expect(vst?.thesis2027Stance).toBe('HOLD');
+    expect(vst?.eligibleForNewCapital).toBe(false);
+    expect(sndk?.thesis2027Stance).toBe('DO_NOT_ADD');
+    expect(sndk?.thesis2027Adjustment).toBe(-8);
+    expect(sndk?.eligibleForNewCapital).toBe(false);
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

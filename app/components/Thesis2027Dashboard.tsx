@@ -145,6 +145,8 @@ export function Thesis2027Dashboard() {
                   <th>Dinámico</th>
                   <th>Eventos</th>
                   <th>Señales estructuradas</th>
+                  <th>Tendencia tesis</th>
+                  <th>Histórico</th>
                   <th>Próx. earnings</th>
                   <th>Acción táctica</th>
                   <th>Racional</th>
@@ -185,6 +187,21 @@ export function Thesis2027Dashboard() {
                     <td>
                       {rank?.thesis2027StructuredSignals?.length
                         ? rank.thesis2027StructuredSignals.map((signal) => `${signal.category} ${signal.direction > 0 ? '+' : '-'}1`).join(' · ')
+                        : '—'}
+                    </td>
+                    <td>
+                      {rank?.thesis2027HistoryTrend ? (
+                        <span className={`thesisTrend thesis-trend-${rank.thesis2027HistoryTrend.toLowerCase()}`}>
+                          {rank.thesis2027HistoryTrend}
+                          {rank.thesis2027AdjustmentDelta !== undefined
+                            ? ` ${rank.thesis2027AdjustmentDelta > 0 ? '+' : ''}${rank.thesis2027AdjustmentDelta}`
+                            : ''}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {rank?.thesis2027HistoryObservations
+                        ? `${rank.thesis2027HistoryObservations} obs.${rank.thesis2027RegimeChanged ? ' · CAMBIO RÉGIMEN' : ''}`
                         : '—'}
                     </td>
                     <td>{rank?.thesis2027UpcomingEarningsDate ?? '—'}</td>

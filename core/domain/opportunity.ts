@@ -151,6 +151,12 @@ export interface TransversalRankingItem {
     direction: -1 | 1;
     evidence: string;
   }>;
+  thesis2027HistoryTrend?: 'STRENGTHENING' | 'STABLE' | 'WEAKENING';
+  thesis2027HistoryObservations?: number;
+  thesis2027AdjustmentDelta?: number;
+  thesis2027RegimeChanged?: boolean;
+  thesis2027PreviousEvidenceStatus?: 'CONFIRMED' | 'MIXED' | 'WEAK' | 'INSUFFICIENT';
+  thesis2027FirstObservedAt?: string;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

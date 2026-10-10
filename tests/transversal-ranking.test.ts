@@ -191,12 +191,12 @@ describe('transversal ranking', () => {
       opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
       totalSymbols: 1,
       portfolioFingerprint: 'abc',
-      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      sourceBySymbol: new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>([['TSM', 'SCANNER']]),
       discoveryBySymbol: new Map([['TSM', {
         score: 79,
         scoreDelta: 7,
         observations: 3,
-        trend: 'ACCELERATING',
+        trend: 'ACCELERATING' as const,
       }]]),
     });
 
@@ -212,7 +212,7 @@ describe('transversal ranking', () => {
       opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
       totalSymbols: 1,
       portfolioFingerprint: 'abc',
-      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      sourceBySymbol: new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>([['TSM', 'SCANNER']]),
       discoveryBySymbol: new Map([['TSM', {
         score: 79,
         scoreDelta: 7,
@@ -225,7 +225,7 @@ describe('transversal ranking', () => {
       opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
       totalSymbols: 1,
       portfolioFingerprint: 'abc',
-      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      sourceBySymbol: new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>([['TSM', 'SCANNER']]),
       previousRanking: first,
     });
 

@@ -18,11 +18,14 @@ import { buildTechnicalSnapshot } from '@/core/engines/technical';
 import {
   marketScannerBatchSize,
   marketScannerEnabled,
+  marketScannerFastTrackScore,
+  marketScannerMinConfirmations,
   marketScannerPromotionLimit,
   marketScannerThreshold,
   parseScannerUniverse,
   preScoreTechnicalCandidate,
   scannerDiscoveryPriority,
+  scannerPromotionEligible,
 } from '@/core/monitoring/market-scanner';
 import {
   buildScannerDiscoveryState,
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
     inspected: 0,
     promoted: [] as Array<{ symbol: string; score: number; reasons: string[]; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
     rejected: [] as Array<{ symbol: string; score: number; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
-    ranked: [] as Array<{ symbol: string; score: number; priority: number; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
+    ranked: [] as Array<{ symbol: string; score: number; priority: number; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number; eligible: boolean; fastTrack: boolean }>,
   };
 
   const scannerTargets: ScanTarget[] = [];
@@ -144,6 +147,8 @@ export async function POST(request: Request) {
     const candidates = circularSlice(scannerUniverse, scannerStart, scannerBatch);
     const threshold = marketScannerThreshold();
     const promotionLimit = marketScannerPromotionLimit();
+    const minConfirmations = marketScannerMinConfirmations();
+    const fastTrackScore = marketScannerFastTrackScore();
     const historyStore = getScannerHistoryStore();
     const inspectedCandidates: Array<{
       candidate: ReturnType<typeof preScoreTechnicalCandidate>;
@@ -198,11 +203,13 @@ export async function POST(request: Request) {
       trend: discovery.trend,
       scoreDelta: discovery.scoreDelta,
       observations: discovery.observations,
+      eligible: scannerPromotionEligible(discovery, threshold, minConfirmations, fastTrackScore),
+      fastTrack: candidate.score >= fastTrackScore && discovery.trend !== 'DETERIORATING',
     }));
 
     const promotedSymbols = new Set(
       inspectedCandidates
-        .filter(({ candidate }) => candidate.score >= threshold)
+        .filter(({ discovery }) => scannerPromotionEligible(discovery, threshold, minConfirmations, fastTrackScore))
         .slice(0, promotionLimit)
         .map(({ candidate }) => candidate.symbol),
     );
@@ -248,6 +255,8 @@ export async function POST(request: Request) {
     trend: ScannerDiscoveryState['trend'];
     priority: number;
     promoted: boolean;
+    eligible: boolean;
+    fastTrack: boolean;
   }>();
   for (const item of scannerSummary.ranked) {
     discoveryBySymbol.set(item.symbol, {
@@ -257,6 +266,8 @@ export async function POST(request: Request) {
       trend: item.trend,
       priority: item.priority,
       promoted: promotedScannerSymbols.has(item.symbol),
+      eligible: item.eligible,
+      fastTrack: item.fastTrack,
     });
   }
   for (const target of rankingTargets) {

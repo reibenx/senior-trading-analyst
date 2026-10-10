@@ -13,6 +13,8 @@ interface Input {
     trend: ScannerDiscoveryTrend;
     priority?: number;
     promoted?: boolean;
+    eligible?: boolean;
+    fastTrack?: boolean;
   }>;
 }
 
@@ -162,6 +164,8 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
             trend: discovery.trend,
             scoreDelta: discovery.scoreDelta,
             observations: discovery.observations,
+            eligible: discovery.eligible,
+            fastTrack: discovery.fastTrack,
             promoted: Boolean(discovery.promoted),
           }))
           .sort((a, b) => b.priority - a.priority)

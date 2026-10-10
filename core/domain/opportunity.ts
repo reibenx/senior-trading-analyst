@@ -154,6 +154,8 @@ export interface ScannerDiscoveryRankingItem {
   trend: ScannerDiscoveryTrend;
   scoreDelta?: number;
   observations: number;
+  eligible?: boolean;
+  fastTrack?: boolean;
   promoted: boolean;
 }
 

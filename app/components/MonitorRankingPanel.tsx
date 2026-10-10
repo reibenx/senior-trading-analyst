@@ -126,7 +126,13 @@ export function MonitorRankingPanel() {
                       </span>
                     </div>
                     <small className={item.promoted ? styles.promoted : styles.notPromoted}>
-                      {item.promoted ? 'PROMOVIDO A ANÁLISIS COMPLETO' : 'SEGUIR OBSERVANDO'}
+                      {item.promoted
+                        ? item.fastTrack ? 'FAST-TRACK · ANÁLISIS COMPLETO' : 'CONFIRMADO · ANÁLISIS COMPLETO'
+                        : item.trend === 'DETERIORATING'
+                          ? 'BLOQUEADO · DETERIORÁNDOSE'
+                          : item.eligible
+                            ? 'ELEGIBLE · ESPERA CUPO DE PROMOCIÓN'
+                            : `EN CONFIRMACIÓN · ${item.observations} obs.`}
                     </small>
                   </article>
                 ))}

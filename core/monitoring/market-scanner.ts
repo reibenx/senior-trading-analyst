@@ -45,6 +45,30 @@ export function marketScannerPromotionLimit(): number {
   return Math.max(1, Math.min(2, Math.floor(configured)));
 }
 
+export function marketScannerMinConfirmations(): number {
+  const configured = Number(process.env.MARKET_SCANNER_MIN_CONFIRMATIONS ?? '2');
+  if (!Number.isFinite(configured)) return 2;
+  return Math.max(1, Math.min(5, Math.floor(configured)));
+}
+
+export function marketScannerFastTrackScore(): number {
+  const configured = Number(process.env.MARKET_SCANNER_FAST_TRACK_SCORE ?? '85');
+  if (!Number.isFinite(configured)) return 85;
+  return Math.max(75, Math.min(100, Math.floor(configured)));
+}
+
+export function scannerPromotionEligible(
+  state: ScannerDiscoveryState,
+  threshold: number,
+  minConfirmations: number,
+  fastTrackScore: number,
+): boolean {
+  if (state.score < threshold) return false;
+  if (state.trend === 'DETERIORATING') return false;
+  if (state.score >= fastTrackScore) return true;
+  return state.observations >= minConfirmations;
+}
+
 export function scannerDiscoveryPriority(state: ScannerDiscoveryState): number {
   const deltaBoost = state.scoreDelta === undefined
     ? 0

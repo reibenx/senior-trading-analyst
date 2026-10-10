@@ -43,6 +43,12 @@ export interface PortfolioOpportunity {
   target?: number;
   thesis: string[];
   risks: string[];
+  thesis2027EventStatus?: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | 'INSUFFICIENT';
+  thesis2027EventAdjustment?: number;
+  thesis2027EventCoverage?: number;
+  thesis2027Catalysts?: string[];
+  thesis2027EventRisks?: string[];
+  thesis2027UpcomingEarningsDate?: string;
   plan: TradePlan;
 }
 
@@ -125,6 +131,12 @@ export interface TransversalRankingItem {
   thesis2027DynamicAdjustment?: number;
   thesis2027EvidenceCoverage?: number;
   thesis2027EvidenceReasons?: string[];
+  thesis2027EventStatus?: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | 'INSUFFICIENT';
+  thesis2027EventAdjustment?: number;
+  thesis2027EventCoverage?: number;
+  thesis2027Catalysts?: string[];
+  thesis2027EventRisks?: string[];
+  thesis2027UpcomingEarningsDate?: string;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

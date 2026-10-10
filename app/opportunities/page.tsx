@@ -18,8 +18,8 @@ export default function OpportunitiesPage() {
           </div>
           <div className="opportunityScope">
             <span>UNIVERSO</span>
-            <b>Cartera + watchlist + monitor</b>
-            <small>El ranking se actualiza con los ciclos del agente.</small>
+            <b>Cartera + watchlist + scanner + tesis 2027</b>
+            <small>El ranking combina timing táctico, portfolio fit y prioridad estratégica.</small>
           </div>
         </section>
         <MonitorRankingPanel />

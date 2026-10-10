@@ -176,6 +176,21 @@ export function MonitorRankingPanel() {
                 }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>
+                {item.thesis2027Stance && item.thesis2027Stance !== 'NEUTRAL' ? (
+                  <div className={
+                    item.thesis2027Adjustment && item.thesis2027Adjustment > 0
+                      ? styles.thesisBoost
+                      : item.thesis2027Adjustment && item.thesis2027Adjustment < 0
+                        ? styles.thesisBlock
+                        : styles.thesisHold
+                  }>
+                    <b>TESIS 2027</b>
+                    <span>
+                      {item.thesis2027Stance.replaceAll('_', ' ')}
+                      {item.thesis2027Adjustment ? ` · ${item.thesis2027Adjustment > 0 ? '+' : ''}${item.thesis2027Adjustment}` : ''}
+                    </span>
+                  </div>
+                ) : null}
                 {discoveryTrendLabel(item) ? (
                   <div className={
                     item.discoveryTrend === 'ACCELERATING' ? styles.discoveryAccelerating

@@ -11,6 +11,8 @@ interface Input {
     scoreDelta?: number;
     observations: number;
     trend: ScannerDiscoveryTrend;
+    priority?: number;
+    promoted?: boolean;
   }>;
 }
 
@@ -151,6 +153,20 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
     totalSymbols: input.totalSymbols,
     coveragePercent,
     sourceCounts,
+    discoveryRanking: input.discoveryBySymbol
+      ? [...input.discoveryBySymbol.entries()]
+          .map(([symbol, discovery]) => ({
+            symbol,
+            score: discovery.score,
+            priority: discovery.priority ?? discovery.score,
+            trend: discovery.trend,
+            scoreDelta: discovery.scoreDelta,
+            observations: discovery.observations,
+            promoted: Boolean(discovery.promoted),
+          }))
+          .sort((a, b) => b.priority - a.priority)
+          .map((item, index) => ({ ...item, rank: index + 1 }))
+      : input.previousRanking?.discoveryRanking,
     items: ranked,
     notes: [
       'Ranking transversal del monitor: consolida lotes rotativos y penaliza concentración, contexto adverso y cobertura incompleta.',

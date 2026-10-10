@@ -49,6 +49,13 @@ export interface PortfolioOpportunity {
   thesis2027Catalysts?: string[];
   thesis2027EventRisks?: string[];
   thesis2027UpcomingEarningsDate?: string;
+  thesis2027StructuredAdjustment?: number;
+  thesis2027StructuredCoverage?: number;
+  thesis2027StructuredSignals?: Array<{
+    category: 'GUIDANCE' | 'ANALYST_REVISION' | 'PRICE_TARGET' | 'CAPEX_AI';
+    direction: -1 | 1;
+    evidence: string;
+  }>;
   plan: TradePlan;
 }
 
@@ -137,6 +144,13 @@ export interface TransversalRankingItem {
   thesis2027Catalysts?: string[];
   thesis2027EventRisks?: string[];
   thesis2027UpcomingEarningsDate?: string;
+  thesis2027StructuredAdjustment?: number;
+  thesis2027StructuredCoverage?: number;
+  thesis2027StructuredSignals?: Array<{
+    category: 'GUIDANCE' | 'ANALYST_REVISION' | 'PRICE_TARGET' | 'CAPEX_AI';
+    direction: -1 | 1;
+    evidence: string;
+  }>;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

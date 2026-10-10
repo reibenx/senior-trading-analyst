@@ -102,7 +102,16 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
             ? 'NEW_OPPORTUNITY' as const
             : 'WATCHLIST' as const;
 
-      const discovery = input.discoveryBySymbol?.get(item.symbol.toUpperCase());
+      const discovery = input.discoveryBySymbol?.get(item.symbol.toUpperCase()) ?? (
+        previous?.discoveryTrend && previous.discoveryScore !== undefined
+          ? {
+              trend: previous.discoveryTrend,
+              score: previous.discoveryScore,
+              scoreDelta: previous.discoveryScoreDelta,
+              observations: previous.discoveryObservations ?? 1,
+            }
+          : undefined
+      );
 
       return {
         ...item,

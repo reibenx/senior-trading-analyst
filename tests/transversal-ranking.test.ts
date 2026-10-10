@@ -205,6 +205,12 @@ describe('transversal ranking', () => {
     expect(ranking.items[0].discoveryScore).toBe(79);
     expect(ranking.items[0].discoveryScoreDelta).toBe(7);
     expect(ranking.items[0].discoveryObservations).toBe(3);
+    expect(ranking.discoveryRanking?.[0]).toMatchObject({
+      rank: 1,
+      symbol: 'TSM',
+      score: 79,
+      trend: 'ACCELERATING',
+    });
   });
 
   it('retains discovery metadata when the scanner rotates away', () => {

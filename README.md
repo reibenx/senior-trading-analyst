@@ -98,3 +98,19 @@ El historial del scanner conserva hasta 8 observaciones por activo durante 7 dí
 ### Scanner confirmation gate
 
 To reduce one-cycle false positives, scanner discoveries normally require repeated confirmation before the expensive full analysis. By default `MARKET_SCANNER_MIN_CONFIRMATIONS=2`. Candidates with `DETERIORATING` momentum are never promoted. Exceptionally strong candidates can use `MARKET_SCANNER_FAST_TRACK_SCORE=85` to bypass the confirmation count, provided they are not deteriorating. Promotion capacity remains bounded by `MARKET_SCANNER_PROMOTION_LIMIT`.
+
+
+## Tesis de cartera 2027
+
+La app incorpora una capa estratégica separada del timing táctico. La tesis central es **AI Infrastructure + Power + Digital Assets** y se aplica como overlay auditable sobre el ranking transversal.
+
+La capa 2027 puede ajustar el score entre -8 y +8 puntos y bloquear nuevo capital cuando la postura estratégica es `HOLD` o `DO_NOT_ADD`. Los activos sin directiva explícita quedan neutrales: el sistema no inventa una tesis.
+
+Posturas iniciales:
+- `PRIORITY_ACCUMULATE`: TSM, GOOGL.
+- `ACCUMULATE_WATCH`: AVGO, NVDA, AMZN.
+- `HOLD`: VST, CEG.
+- `DO_NOT_ADD`: SNDK, ETHA, PLTR.
+- META conserva alineación temática con hyperscalers pero sin ajuste de asignación.
+
+La vista `/thesis-2027` cruza la postura estratégica con la cartera IOL y el ranking vivo. El panel de Oportunidades muestra además el overlay Tesis 2027 dentro de cada activo.

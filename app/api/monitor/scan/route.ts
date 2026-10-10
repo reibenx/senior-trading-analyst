@@ -12,6 +12,7 @@ import { getMarketDataProvider } from '@/core/providers/market-provider';
 import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
+import { enrichOpportunityWithThesis2027Events } from '@/core/services/thesis-2027-events';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
 import { buildTechnicalSnapshot } from '@/core/engines/technical';
@@ -315,7 +316,8 @@ export async function POST(request: Request) {
         positions,
       });
 
-      const opportunity = buildPortfolioOpportunity(plan, positions);
+      const rawOpportunity = buildPortfolioOpportunity(plan, positions);
+      const opportunity = await enrichOpportunityWithThesis2027Events(rawOpportunity);
       if (opportunityStore) {
         await opportunityStore
           .set(target.strategy, portfolioFingerprint, opportunity, portfolioOpportunityTtlSeconds(target.strategy))

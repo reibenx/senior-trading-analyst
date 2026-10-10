@@ -3,7 +3,9 @@ import type { TechnicalSnapshot } from '../core/domain/market';
 import {
   parseScannerUniverse,
   preScoreTechnicalCandidate,
+  scannerDiscoveryPriority,
 } from '../core/monitoring/market-scanner';
+import { buildScannerDiscoveryState } from '../core/monitoring/scanner-history-store';
 
 function snapshot(overrides: Partial<TechnicalSnapshot> = {}): TechnicalSnapshot {
   return {
@@ -33,6 +35,38 @@ describe('market scanner', () => {
     expect(candidate.score).toBeGreaterThanOrEqual(66);
     expect(candidate.reasons).toContain('Tendencia alcista');
     expect(candidate.reasons).toContain('Estructura HH/HL');
+  });
+
+  it('classifies scanner momentum and boosts accelerating discoveries', () => {
+    const history = {
+      symbol: 'AAA',
+      strategy: 'position' as const,
+      observations: [
+        { score: 68, observedAt: '2026-10-09T12:00:00.000Z' },
+        { score: 72, observedAt: '2026-10-09T13:00:00.000Z' },
+      ],
+    };
+    const accelerating = buildScannerDiscoveryState('AAA', 'position', 79, history);
+    const stable = buildScannerDiscoveryState('BBB', 'position', 79, {
+      symbol: 'BBB',
+      strategy: 'position',
+      observations: [{ score: 77, observedAt: '2026-10-09T13:00:00.000Z' }],
+    });
+
+    expect(accelerating.trend).toBe('ACCELERATING');
+    expect(accelerating.scoreDelta).toBe(7);
+    expect(accelerating.observations).toBe(3);
+    expect(scannerDiscoveryPriority(accelerating)).toBeGreaterThan(scannerDiscoveryPriority(stable));
+  });
+
+  it('classifies a meaningful score deterioration', () => {
+    const state = buildScannerDiscoveryState('AAA', 'position', 66, {
+      symbol: 'AAA',
+      strategy: 'position',
+      observations: [{ score: 74, observedAt: '2026-10-09T13:00:00.000Z' }],
+    });
+    expect(state.trend).toBe('DETERIORATING');
+    expect(state.scoreDelta).toBe(-8);
   });
 
   it('rejects structurally weak bearish candidates', () => {

@@ -1,4 +1,4 @@
-import type { PortfolioOpportunity, TransversalRankingSnapshot } from '@/core/domain/opportunity';
+import type { PortfolioOpportunity, ScannerDiscoveryTrend, TransversalRankingSnapshot } from '@/core/domain/opportunity';
 
 interface Input {
   opportunities: PortfolioOpportunity[];
@@ -6,6 +6,14 @@ interface Input {
   portfolioFingerprint: string;
   previousRanking?: TransversalRankingSnapshot | null;
   sourceBySymbol?: Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>;
+  discoveryBySymbol?: Map<string, {
+    score: number;
+    scoreDelta?: number;
+    observations: number;
+    trend: ScannerDiscoveryTrend;
+    priority?: number;
+    promoted?: boolean;
+  }>;
 }
 
 function dataQuality(item: PortfolioOpportunity): 'FULL' | 'PARTIAL' | 'LIMITED' {
@@ -96,6 +104,17 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
             ? 'NEW_OPPORTUNITY' as const
             : 'WATCHLIST' as const;
 
+      const discovery = input.discoveryBySymbol?.get(item.symbol.toUpperCase()) ?? (
+        previous?.discoveryTrend && previous.discoveryScore !== undefined
+          ? {
+              trend: previous.discoveryTrend,
+              score: previous.discoveryScore,
+              scoreDelta: previous.discoveryScoreDelta,
+              observations: previous.discoveryObservations ?? 1,
+            }
+          : undefined
+      );
+
       return {
         ...item,
         rank,
@@ -103,6 +122,10 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         rankChange,
         movement,
         source,
+        discoveryTrend: discovery?.trend,
+        discoveryScore: discovery?.score,
+        discoveryScoreDelta: discovery?.scoreDelta,
+        discoveryObservations: discovery?.observations,
       };
     });
 
@@ -130,6 +153,20 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
     totalSymbols: input.totalSymbols,
     coveragePercent,
     sourceCounts,
+    discoveryRanking: input.discoveryBySymbol
+      ? [...input.discoveryBySymbol.entries()]
+          .map(([symbol, discovery]) => ({
+            symbol,
+            score: discovery.score,
+            priority: discovery.priority ?? discovery.score,
+            trend: discovery.trend,
+            scoreDelta: discovery.scoreDelta,
+            observations: discovery.observations,
+            promoted: Boolean(discovery.promoted),
+          }))
+          .sort((a, b) => b.priority - a.priority)
+          .map((item, index) => ({ ...item, rank: index + 1 }))
+      : input.previousRanking?.discoveryRanking,
     items: ranked,
     notes: [
       'Ranking transversal del monitor: consolida lotes rotativos y penaliza concentración, contexto adverso y cobertura incompleta.',

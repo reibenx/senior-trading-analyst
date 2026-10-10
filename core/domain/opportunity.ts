@@ -104,6 +104,7 @@ export interface PortfolioRankingSnapshot {
 
 export type RankingMovement = 'NEW' | 'UP' | 'DOWN' | 'UNCHANGED';
 export type OpportunityUniverseSource = 'PORTFOLIO' | 'WATCHLIST' | 'NEW_OPPORTUNITY';
+export type ScannerDiscoveryTrend = 'ACCELERATING' | 'STABLE' | 'DETERIORATING';
 
 export interface TransversalRankingItem {
   rank: number;
@@ -111,6 +112,10 @@ export interface TransversalRankingItem {
   rankChange?: number;
   movement: RankingMovement;
   source: OpportunityUniverseSource;
+  discoveryTrend?: ScannerDiscoveryTrend;
+  discoveryScore?: number;
+  discoveryScoreDelta?: number;
+  discoveryObservations?: number;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;
@@ -141,6 +146,17 @@ export interface TransversalRankingSourceCounts {
   newOpportunities: number;
 }
 
+export interface ScannerDiscoveryRankingItem {
+  rank: number;
+  symbol: string;
+  score: number;
+  priority: number;
+  trend: ScannerDiscoveryTrend;
+  scoreDelta?: number;
+  observations: number;
+  promoted: boolean;
+}
+
 export interface TransversalRankingSnapshot {
   generatedAt: string;
   previousGeneratedAt?: string;
@@ -150,6 +166,7 @@ export interface TransversalRankingSnapshot {
   totalSymbols: number;
   coveragePercent: number;
   sourceCounts: TransversalRankingSourceCounts;
+  discoveryRanking?: ScannerDiscoveryRankingItem[];
   items: TransversalRankingItem[];
   notes: string[];
 }

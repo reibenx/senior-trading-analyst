@@ -1,5 +1,6 @@
 import type { TechnicalSnapshot } from '@/core/domain/market';
 import type { Strategy } from '@/core/domain/trading';
+import type { ScannerDiscoveryState } from '@/core/monitoring/scanner-history-store';
 
 export interface ScannerCandidate {
   symbol: string;
@@ -36,6 +37,25 @@ export function marketScannerThreshold(): number {
   const configured = Number(process.env.MARKET_SCANNER_MIN_SCORE ?? '66');
   if (!Number.isFinite(configured)) return 66;
   return Math.max(50, Math.min(90, Math.floor(configured)));
+}
+
+export function marketScannerPromotionLimit(): number {
+  const configured = Number(process.env.MARKET_SCANNER_PROMOTION_LIMIT ?? '1');
+  if (!Number.isFinite(configured)) return 1;
+  return Math.max(1, Math.min(2, Math.floor(configured)));
+}
+
+export function scannerDiscoveryPriority(state: ScannerDiscoveryState): number {
+  const deltaBoost = state.scoreDelta === undefined
+    ? 0
+    : Math.max(-8, Math.min(8, state.scoreDelta));
+  const trendAdjustment = state.trend === 'ACCELERATING'
+    ? 6
+    : state.trend === 'DETERIORATING'
+      ? -8
+      : 0;
+  const persistenceBoost = Math.min(4, Math.max(0, state.observations - 1));
+  return Math.max(0, Math.min(110, state.score + deltaBoost + trendAdjustment + persistenceBoost));
 }
 
 export function preScoreTechnicalCandidate(

@@ -55,7 +55,7 @@ Plataforma modular para análisis técnico, fundamental, riesgo y cartera, con s
 
 ## Monitoreo 24/7
 
-`POST /api/monitor/scan` construye automáticamente análisis y Trade Plans para posiciones del broker y símbolos adicionales de `MONITOR_WATCHLIST`. También rota un lote pequeño de `MARKET_SCANNER_UNIVERSE` (2 símbolos por defecto), calcula un prefiltro técnico barato y sólo promueve al análisis completo los candidatos que superan `MARKET_SCANNER_MIN_SCORE`. El endpoint requiere `Authorization: Bearer <MONITOR_CRON_TOKEN>`.
+`POST /api/monitor/scan` construye automáticamente análisis y Trade Plans para posiciones del broker y símbolos adicionales de `MONITOR_WATCHLIST`. También rota un lote pequeño de `MARKET_SCANNER_UNIVERSE` (2 símbolos por defecto), calcula un prefiltro técnico barato, conserva historial de score y clasifica el momentum como `ACCELERATING`, `STABLE` o `DETERIORATING`. Los candidatos se ordenan por score, delta y persistencia; sólo los mejores hasta `MARKET_SCANNER_PROMOTION_LIMIT` pasan al análisis completo. El endpoint requiere `Authorization: Bearer <MONITOR_CRON_TOKEN>`.
 
 `.github/workflows/monitor.yml` llama al scanner cada 15 minutos cuando los secrets `APP_BASE_URL` y `MONITOR_CRON_TOKEN` están configurados en GitHub.
 
@@ -90,3 +90,6 @@ Las alertas se deduplican mediante una clave estable por símbolo/evento/nivel c
 El scanner externo está activo por defecto y usa un universo líquido y acotado cuando `MARKET_SCANNER_UNIVERSE` está vacío. Puede desactivarse con `MARKET_SCANNER_ENABLED=false`.
 
 La rotación usa un cursor Redis independiente cuando Upstash está configurado. Los candidatos que no superan el prefiltro no consumen el análisis completo. Los promovidos se almacenan en el mismo cache de oportunidades y aparecen en Oportunidades como **NUEVA OPORTUNIDAD**. El universo completo permanece como referencia de cobertura para que los descubrimientos cacheados no desaparezcan al rotar el lote.
+
+
+El historial del scanner conserva hasta 8 observaciones por activo durante 7 días en Redis. Un cambio de score de al menos +5 se clasifica como **ACCELERATING** y de -5 o menos como **DETERIORATING**; el resto queda **STABLE**. La UI de Oportunidades muestra esta señal junto con el score del scanner, delta y número de observaciones.

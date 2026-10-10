@@ -57,6 +57,12 @@ export function MonitorRankingPanel() {
     return item.rankChange > 0 ? `↑${item.rankChange}` : `↓${Math.abs(item.rankChange)}`;
   }
 
+  function discoveryTrendLabel(item: TransversalRankingSnapshot['items'][number]) {
+    if (item.discoveryTrend === 'ACCELERATING') return 'ACELERANDO';
+    if (item.discoveryTrend === 'DETERIORATING') return 'DETERIORÁNDOSE';
+    return item.discoveryTrend === 'STABLE' ? 'ESTABLE' : null;
+  }
+
   return (
     <section className={styles.shell}>
       <div className={styles.head}>
@@ -91,6 +97,42 @@ export function MonitorRankingPanel() {
             </div>
             <div><span>Actualizado</span><b>{new Date(ranking.generatedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</b><small>{new Date(ranking.generatedAt).toLocaleDateString('es-AR')}</small></div>
           </div>
+
+          {ranking.discoveryRanking?.length ? (
+            <>
+              <div className={styles.sectionTitle}>
+                <div><span>DESCUBRIMIENTO</span><h2>Pre-ranking del Market Scanner</h2></div>
+                <small>Sólo los mejores candidatos pasan al análisis completo</small>
+              </div>
+              <div className={styles.discoveryGrid}>
+                {ranking.discoveryRanking.map((item) => (
+                  <article key={item.symbol} className={styles.discoveryCard}>
+                    <div><span>#{item.rank}</span><b>{item.symbol}</b></div>
+                    <strong>{item.score}</strong>
+                    <p>Prioridad {item.priority}</p>
+                    <div className={
+                      item.trend === 'ACCELERATING' ? styles.discoveryAccelerating
+                        : item.trend === 'DETERIORATING' ? styles.discoveryDeteriorating
+                          : styles.discoveryStable
+                    }>
+                      <b>{
+                        item.trend === 'ACCELERATING' ? 'ACELERANDO'
+                          : item.trend === 'DETERIORATING' ? 'DETERIORÁNDOSE'
+                            : 'ESTABLE'
+                      }</b>
+                      <span>
+                        {item.scoreDelta !== undefined ? `Δ ${item.scoreDelta > 0 ? '+' : ''}${item.scoreDelta}` : 'sin histórico'}
+                        {item.observations ? ` · ${item.observations} obs.` : ''}
+                      </span>
+                    </div>
+                    <small className={item.promoted ? styles.promoted : styles.notPromoted}>
+                      {item.promoted ? 'PROMOVIDO A ANÁLISIS COMPLETO' : 'SEGUIR OBSERVANDO'}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <div className={styles.filters}>
             <button type="button" className={sourceFilter === 'ALL' ? styles.activeFilter : ''} onClick={() => setSourceFilter('ALL')}>
@@ -128,6 +170,20 @@ export function MonitorRankingPanel() {
                 }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>
+                {discoveryTrendLabel(item) ? (
+                  <div className={
+                    item.discoveryTrend === 'ACCELERATING' ? styles.discoveryAccelerating
+                      : item.discoveryTrend === 'DETERIORATING' ? styles.discoveryDeteriorating
+                        : styles.discoveryStable
+                  }>
+                    <b>{discoveryTrendLabel(item)}</b>
+                    <span>
+                      Scanner {item.discoveryScore ?? '—'}
+                      {item.discoveryScoreDelta !== undefined ? ` · Δ ${item.discoveryScoreDelta > 0 ? '+' : ''}${item.discoveryScoreDelta}` : ''}
+                      {item.discoveryObservations ? ` · ${item.discoveryObservations} obs.` : ''}
+                    </span>
+                  </div>
+                ) : null}
                 <dl>
                   <div><dt>Prioridad</dt><dd>{item.signalPriorityLevel ?? '—'} {item.signalPriorityScore ?? '—'}</dd></div>
                   <div><dt>Régimen</dt><dd>{item.marketRegime ?? '—'}</dd></div>

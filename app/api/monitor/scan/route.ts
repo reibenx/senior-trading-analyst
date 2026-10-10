@@ -240,11 +240,14 @@ export async function POST(request: Request) {
   ]);
 
   const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>();
+  const promotedScannerSymbols = new Set(scannerSummary.promoted.map((item) => item.symbol));
   const discoveryBySymbol = new Map<string, {
     score: number;
     scoreDelta?: number;
     observations: number;
     trend: ScannerDiscoveryState['trend'];
+    priority: number;
+    promoted: boolean;
   }>();
   for (const item of scannerSummary.ranked) {
     discoveryBySymbol.set(item.symbol, {
@@ -252,6 +255,8 @@ export async function POST(request: Request) {
       scoreDelta: item.scoreDelta,
       observations: item.observations,
       trend: item.trend,
+      priority: item.priority,
+      promoted: promotedScannerSymbols.has(item.symbol),
     });
   }
   for (const target of rankingTargets) {

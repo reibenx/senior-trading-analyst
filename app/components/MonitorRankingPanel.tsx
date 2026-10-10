@@ -190,6 +190,8 @@ export function MonitorRankingPanel() {
                       {item.thesis2027Adjustment ? ` · ${item.thesis2027Adjustment > 0 ? '+' : ''}${item.thesis2027Adjustment}` : ''}
                       {item.thesis2027EvidenceStatus ? ` · ${item.thesis2027EvidenceStatus}` : ''}
                       {item.thesis2027DynamicAdjustment ? ` · dyn ${item.thesis2027DynamicAdjustment > 0 ? '+' : ''}${item.thesis2027DynamicAdjustment}` : ''}
+                      {item.thesis2027EventStatus ? ` · evt ${item.thesis2027EventStatus}` : ''}
+                      {item.thesis2027EventAdjustment ? ` ${item.thesis2027EventAdjustment > 0 ? '+' : ''}${item.thesis2027EventAdjustment}` : ''}
                     </span>
                   </div>
                 ) : null}

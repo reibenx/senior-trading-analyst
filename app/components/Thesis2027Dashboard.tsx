@@ -143,6 +143,8 @@ export function Thesis2027Dashboard() {
                   <th>Score ajustado</th>
                   <th>Estado evidencia</th>
                   <th>Dinámico</th>
+                  <th>Eventos</th>
+                  <th>Próx. earnings</th>
                   <th>Acción táctica</th>
                   <th>Racional</th>
                 </tr>
@@ -171,10 +173,21 @@ export function Thesis2027Dashboard() {
                         ? `${rank.thesis2027DynamicAdjustment > 0 ? '+' : ''}${rank.thesis2027DynamicAdjustment}`
                         : '—'}
                     </td>
+                    <td>
+                      {rank?.thesis2027EventStatus ? (
+                        <span className={`thesisEvent thesis-event-${rank.thesis2027EventStatus.toLowerCase()}`}>
+                          {rank.thesis2027EventStatus}
+                          {rank.thesis2027EventAdjustment ? ` ${rank.thesis2027EventAdjustment > 0 ? '+' : ''}${rank.thesis2027EventAdjustment}` : ''}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>{rank?.thesis2027UpcomingEarningsDate ?? '—'}</td>
                     <td>{rank?.action?.replaceAll('_', ' ') ?? '—'}</td>
                     <td>
                       {profile.rationale}
                       {rank?.thesis2027EvidenceReasons?.[0] ? ` · ${rank.thesis2027EvidenceReasons[0]}` : ''}
+                      {rank?.thesis2027Catalysts?.[0] ? ` · Catalizador: ${rank.thesis2027Catalysts[0]}` : ''}
+                      {rank?.thesis2027EventRisks?.[0] ? ` · Riesgo evento: ${rank.thesis2027EventRisks[0]}` : ''}
                     </td>
                   </tr>
                 ))}

@@ -58,7 +58,9 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         marketScore: item.scores.market,
         convictionScore: item.scores.conviction,
       });
-      const score = Math.max(0, Math.min(100, baseScore + liveThesis2027.finalAdjustment));
+      const eventAdjustment = item.thesis2027EventAdjustment ?? 0;
+      const combinedThesisAdjustment = Math.max(-10, Math.min(10, liveThesis2027.finalAdjustment + eventAdjustment));
+      const score = Math.max(0, Math.min(100, baseScore + combinedThesisAdjustment));
       const eligibleForNewCapital =
         (item.action === 'AUMENTAR' || item.action === 'COMPRAR_EN_PULLBACK')
         && item.currentWeightPercent < 20
@@ -73,8 +75,9 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       if (item.currentWeightPercent >= 15) notes.push('Concentración actual elevada; se penaliza nuevo capital.');
       if (item.marketRegime === 'DEFENSIVE') notes.push('Régimen defensivo: compras penalizadas.');
       if (item.distanceToEntryPercent !== undefined && item.distanceToEntryPercent > 4) notes.push('Precio alejado de la zona preferida; priorizar pullback.');
-      if (liveThesis2027.finalAdjustment > 0) notes.push(`Tesis 2027 favorece este activo (+${liveThesis2027.finalAdjustment}).`);
-      if (liveThesis2027.dynamicAdjustment !== 0) notes.push(`Tesis viva: ajuste dinámico ${liveThesis2027.dynamicAdjustment > 0 ? '+' : ''}${liveThesis2027.dynamicAdjustment}.`);
+      if (combinedThesisAdjustment > 0) notes.push(`Tesis 2027 favorece este activo (+${combinedThesisAdjustment}).`);
+      if (liveThesis2027.dynamicAdjustment !== 0) notes.push(`Tesis viva: ajuste fundamental/mercado ${liveThesis2027.dynamicAdjustment > 0 ? '+' : ''}${liveThesis2027.dynamicAdjustment}.`);
+      if (eventAdjustment !== 0) notes.push(`Eventos/catalizadores: ajuste ${eventAdjustment > 0 ? '+' : ''}${eventAdjustment}.`);
       if (thesis2027.blocksNewCapital) notes.push('Tesis 2027 bloquea nuevo capital para este activo.');
 
       return {
@@ -85,12 +88,18 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         adjustedScore: score,
         thesis2027Stance: thesis2027.stance,
         thesis2027Themes: thesis2027.themes,
-        thesis2027Adjustment: liveThesis2027.finalAdjustment,
+        thesis2027Adjustment: combinedThesisAdjustment,
         thesis2027Rationale: thesis2027.rationale,
         thesis2027EvidenceStatus: liveThesis2027.status,
         thesis2027DynamicAdjustment: liveThesis2027.dynamicAdjustment,
         thesis2027EvidenceCoverage: liveThesis2027.evidenceCoverage,
         thesis2027EvidenceReasons: liveThesis2027.reasons,
+        thesis2027EventStatus: item.thesis2027EventStatus,
+        thesis2027EventAdjustment: item.thesis2027EventAdjustment,
+        thesis2027EventCoverage: item.thesis2027EventCoverage,
+        thesis2027Catalysts: item.thesis2027Catalysts,
+        thesis2027EventRisks: item.thesis2027EventRisks,
+        thesis2027UpcomingEarningsDate: item.thesis2027UpcomingEarningsDate,
         signalPriorityLevel: item.signalPriorityLevel,
         signalPriorityScore: item.signalPriorityScore,
         marketRegime: item.marketRegime,

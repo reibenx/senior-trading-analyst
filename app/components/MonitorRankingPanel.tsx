@@ -98,6 +98,42 @@ export function MonitorRankingPanel() {
             <div><span>Actualizado</span><b>{new Date(ranking.generatedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</b><small>{new Date(ranking.generatedAt).toLocaleDateString('es-AR')}</small></div>
           </div>
 
+          {ranking.discoveryRanking?.length ? (
+            <>
+              <div className={styles.sectionTitle}>
+                <div><span>DESCUBRIMIENTO</span><h2>Pre-ranking del Market Scanner</h2></div>
+                <small>Sólo los mejores candidatos pasan al análisis completo</small>
+              </div>
+              <div className={styles.discoveryGrid}>
+                {ranking.discoveryRanking.map((item) => (
+                  <article key={item.symbol} className={styles.discoveryCard}>
+                    <div><span>#{item.rank}</span><b>{item.symbol}</b></div>
+                    <strong>{item.score}</strong>
+                    <p>Prioridad {item.priority}</p>
+                    <div className={
+                      item.trend === 'ACCELERATING' ? styles.discoveryAccelerating
+                        : item.trend === 'DETERIORATING' ? styles.discoveryDeteriorating
+                          : styles.discoveryStable
+                    }>
+                      <b>{
+                        item.trend === 'ACCELERATING' ? 'ACELERANDO'
+                          : item.trend === 'DETERIORATING' ? 'DETERIORÁNDOSE'
+                            : 'ESTABLE'
+                      }</b>
+                      <span>
+                        {item.scoreDelta !== undefined ? `Δ ${item.scoreDelta > 0 ? '+' : ''}${item.scoreDelta}` : 'sin histórico'}
+                        {item.observations ? ` · ${item.observations} obs.` : ''}
+                      </span>
+                    </div>
+                    <small className={item.promoted ? styles.promoted : styles.notPromoted}>
+                      {item.promoted ? 'PROMOVIDO A ANÁLISIS COMPLETO' : 'SEGUIR OBSERVANDO'}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
+
           <div className={styles.filters}>
             <button type="button" className={sourceFilter === 'ALL' ? styles.activeFilter : ''} onClick={() => setSourceFilter('ALL')}>
               Todos <b>{ranking.items.length}</b>

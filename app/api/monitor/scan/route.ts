@@ -40,6 +40,10 @@ import {
   getPortfolioOpportunityStore,
   portfolioOpportunityTtlSeconds,
 } from '@/core/persistence/portfolio-opportunity-store';
+import {
+  buildThesis2027HistoryState,
+  getThesis2027HistoryStore,
+} from '@/core/persistence/thesis-2027-history-store';
 
 const DEFAULT_TIMEFRAME: Record<Strategy, Timeframe> = {
   day: '15m',
@@ -376,6 +380,69 @@ export async function POST(request: Request) {
         sourceBySymbol,
         discoveryBySymbol,
       });
+
+      const thesisHistoryStore = getThesis2027HistoryStore();
+      if (thesisHistoryStore) {
+        const observedAt = transversalRanking.generatedAt;
+        for (const item of transversalRanking.items) {
+          if (!item.thesis2027Themes || item.thesis2027Themes.includes('OTHER') || item.thesis2027Adjustment === undefined) continue;
+          const observation = {
+            observedAt,
+            adjustment: item.thesis2027Adjustment,
+            evidenceStatus: item.thesis2027EvidenceStatus,
+            eventStatus: item.thesis2027EventStatus,
+            dynamicAdjustment: item.thesis2027DynamicAdjustment,
+            eventAdjustment: item.thesis2027EventAdjustment,
+            structuredAdjustment: item.thesis2027StructuredAdjustment,
+          };
+          const history = await thesisHistoryStore.get(item.symbol).catch(() => null);
+          const state = buildThesis2027HistoryState(item.symbol, observation, history);
+          item.thesis2027HistoryTrend = state.trend;
+          item.thesis2027HistoryObservations = state.observations;
+          item.thesis2027AdjustmentDelta = state.adjustmentDelta;
+          item.thesis2027RegimeChanged = state.regimeChanged;
+          item.thesis2027PreviousEvidenceStatus = state.previousEvidenceStatus;
+          item.thesis2027FirstObservedAt = state.firstObservedAt;
+          await thesisHistoryStore.append(item.symbol, observation).catch(() => undefined);
+
+          const materialShift = state.regimeChanged || Math.abs(state.adjustmentDelta ?? 0) >= 3;
+          if (materialShift && state.previousAdjustment !== undefined) {
+            const event: AlertEvent = {
+              id: `thesis-regime:${item.symbol}:${observedAt}`,
+              symbol: item.symbol,
+              severity: state.trend === 'WEAKENING' ? 'WATCH' : 'OPPORTUNITY',
+              type: 'THESIS_2027_REGIME_CHANGED',
+              title: state.trend === 'WEAKENING' ? 'Tesis 2027 se debilita' : 'Tesis 2027 cambia de régimen',
+              message: `${item.symbol}: ajuste ${state.previousAdjustment} → ${state.currentAdjustment}${state.previousEvidenceStatus && state.currentEvidenceStatus ? ` · ${state.previousEvidenceStatus} → ${state.currentEvidenceStatus}` : ''}`,
+              createdAt: observedAt,
+              metadata: {
+                dedupKey: `thesis-regime:${item.symbol}:${state.previousEvidenceStatus ?? 'none'}:${state.currentEvidenceStatus ?? 'none'}:${state.currentAdjustment}`,
+                previousAdjustment: state.previousAdjustment,
+                currentAdjustment: state.currentAdjustment,
+                adjustmentDelta: state.adjustmentDelta,
+                trend: state.trend,
+                previousEvidenceStatus: state.previousEvidenceStatus,
+                currentEvidenceStatus: state.currentEvidenceStatus,
+              },
+            };
+            const acquired = stateStore
+              ? await stateStore.acquire(event, alertTtlSeconds()).catch(() => true)
+              : true;
+            if (acquired) {
+              await Promise.allSettled(providers.map((provider) => provider.send(event)));
+              await appendActivity({
+                kind: 'SIGNAL',
+                symbol: item.symbol,
+                title: event.title,
+                detail: event.message,
+                severity: event.severity,
+                metadata: event.metadata,
+                createdAt: event.createdAt,
+              }).catch(() => undefined);
+            }
+          }
+        }
+      }
 
       const rankingTtlSeconds = Math.max(
         30 * 60,

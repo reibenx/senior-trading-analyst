@@ -121,6 +121,10 @@ export interface TransversalRankingItem {
   thesis2027Themes?: Thesis2027Theme[];
   thesis2027Adjustment?: number;
   thesis2027Rationale?: string;
+  thesis2027EvidenceStatus?: 'CONFIRMED' | 'MIXED' | 'WEAK' | 'INSUFFICIENT';
+  thesis2027DynamicAdjustment?: number;
+  thesis2027EvidenceCoverage?: number;
+  thesis2027EvidenceReasons?: string[];
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

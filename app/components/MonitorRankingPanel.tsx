@@ -57,6 +57,12 @@ export function MonitorRankingPanel() {
     return item.rankChange > 0 ? `↑${item.rankChange}` : `↓${Math.abs(item.rankChange)}`;
   }
 
+  function discoveryTrendLabel(item: TransversalRankingSnapshot['items'][number]) {
+    if (item.discoveryTrend === 'ACCELERATING') return 'ACELERANDO';
+    if (item.discoveryTrend === 'DETERIORATING') return 'DETERIORÁNDOSE';
+    return item.discoveryTrend === 'STABLE' ? 'ESTABLE' : null;
+  }
+
   return (
     <section className={styles.shell}>
       <div className={styles.head}>
@@ -128,6 +134,20 @@ export function MonitorRankingPanel() {
                 }>{sourceLabel(item)}</span>
                 <strong>{item.adjustedScore}</strong>
                 <p>{item.action.replaceAll('_',' ')}</p>
+                {discoveryTrendLabel(item) ? (
+                  <div className={
+                    item.discoveryTrend === 'ACCELERATING' ? styles.discoveryAccelerating
+                      : item.discoveryTrend === 'DETERIORATING' ? styles.discoveryDeteriorating
+                        : styles.discoveryStable
+                  }>
+                    <b>{discoveryTrendLabel(item)}</b>
+                    <span>
+                      Scanner {item.discoveryScore ?? '—'}
+                      {item.discoveryScoreDelta !== undefined ? ` · Δ ${item.discoveryScoreDelta > 0 ? '+' : ''}${item.discoveryScoreDelta}` : ''}
+                      {item.discoveryObservations ? ` · ${item.discoveryObservations} obs.` : ''}
+                    </span>
+                  </div>
+                ) : null}
                 <dl>
                   <div><dt>Prioridad</dt><dd>{item.signalPriorityLevel ?? '—'} {item.signalPriorityScore ?? '—'}</dd></div>
                   <div><dt>Régimen</dt><dd>{item.marketRegime ?? '—'}</dd></div>

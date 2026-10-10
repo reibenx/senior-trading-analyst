@@ -114,3 +114,16 @@ Posturas iniciales:
 - META conserva alineación temática con hyperscalers pero sin ajuste de asignación.
 
 La vista `/thesis-2027` cruza la postura estratégica con la cartera IOL y el ranking vivo. El panel de Oportunidades muestra además el overlay Tesis 2027 dentro de cada activo.
+
+
+### Tesis 2027 viva
+
+La capa estratégica ahora tiene un componente dinámico basado en evidencia ya calculada por el Senior Trading Analyst. Se consideran los scores de fundamentales, valoración, contexto de mercado y convicción. El ajuste dinámico está acotado entre -4 y +4 y el ajuste final de tesis entre -10 y +10.
+
+Estados:
+- `CONFIRMED`: la evidencia fortalece materialmente la tesis.
+- `MIXED`: la evidencia no cambia materialmente la convicción.
+- `WEAK`: la evidencia debilita materialmente la tesis.
+- `INSUFFICIENT`: no hay cobertura suficiente para alterar la tesis.
+
+La capa dinámica sólo se aplica a activos pertenecientes al universo temático explícito de la Tesis 2027. Activos fuera de ese universo permanecen neutrales y no reciben ajuste estratégico por tener buenos scores generales.

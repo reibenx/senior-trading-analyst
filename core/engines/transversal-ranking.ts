@@ -1,5 +1,6 @@
 import type { PortfolioOpportunity, ScannerDiscoveryTrend, TransversalRankingSnapshot } from '@/core/domain/opportunity';
 import { getThesis2027Overlay } from '@/core/engines/thesis-2027';
+import { assessLiveThesis2027 } from '@/core/engines/live-thesis-2027';
 
 interface Input {
   opportunities: PortfolioOpportunity[];
@@ -51,7 +52,13 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       const baseScore = adjustedScore(item);
       const quality = dataQuality(item);
       const thesis2027 = getThesis2027Overlay(item.symbol);
-      const score = Math.max(0, Math.min(100, baseScore + thesis2027.strategicAdjustment));
+      const liveThesis2027 = assessLiveThesis2027(thesis2027, {
+        fundamentalScore: item.scores.fundamental,
+        valuationScore: item.scores.valuation,
+        marketScore: item.scores.market,
+        convictionScore: item.scores.conviction,
+      });
+      const score = Math.max(0, Math.min(100, baseScore + liveThesis2027.finalAdjustment));
       const eligibleForNewCapital =
         (item.action === 'AUMENTAR' || item.action === 'COMPRAR_EN_PULLBACK')
         && item.currentWeightPercent < 20
@@ -66,7 +73,8 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       if (item.currentWeightPercent >= 15) notes.push('Concentración actual elevada; se penaliza nuevo capital.');
       if (item.marketRegime === 'DEFENSIVE') notes.push('Régimen defensivo: compras penalizadas.');
       if (item.distanceToEntryPercent !== undefined && item.distanceToEntryPercent > 4) notes.push('Precio alejado de la zona preferida; priorizar pullback.');
-      if (thesis2027.strategicAdjustment > 0) notes.push(`Tesis 2027 favorece este activo (+${thesis2027.strategicAdjustment}).`);
+      if (liveThesis2027.finalAdjustment > 0) notes.push(`Tesis 2027 favorece este activo (+${liveThesis2027.finalAdjustment}).`);
+      if (liveThesis2027.dynamicAdjustment !== 0) notes.push(`Tesis viva: ajuste dinámico ${liveThesis2027.dynamicAdjustment > 0 ? '+' : ''}${liveThesis2027.dynamicAdjustment}.`);
       if (thesis2027.blocksNewCapital) notes.push('Tesis 2027 bloquea nuevo capital para este activo.');
 
       return {
@@ -77,8 +85,12 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         adjustedScore: score,
         thesis2027Stance: thesis2027.stance,
         thesis2027Themes: thesis2027.themes,
-        thesis2027Adjustment: thesis2027.strategicAdjustment,
+        thesis2027Adjustment: liveThesis2027.finalAdjustment,
         thesis2027Rationale: thesis2027.rationale,
+        thesis2027EvidenceStatus: liveThesis2027.status,
+        thesis2027DynamicAdjustment: liveThesis2027.dynamicAdjustment,
+        thesis2027EvidenceCoverage: liveThesis2027.evidenceCoverage,
+        thesis2027EvidenceReasons: liveThesis2027.reasons,
         signalPriorityLevel: item.signalPriorityLevel,
         signalPriorityScore: item.signalPriorityScore,
         marketRegime: item.marketRegime,

@@ -59,7 +59,8 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         convictionScore: item.scores.conviction,
       });
       const eventAdjustment = item.thesis2027EventAdjustment ?? 0;
-      const combinedThesisAdjustment = Math.max(-10, Math.min(10, liveThesis2027.finalAdjustment + eventAdjustment));
+      const structuredAdjustment = item.thesis2027StructuredAdjustment ?? 0;
+      const combinedThesisAdjustment = Math.max(-10, Math.min(10, liveThesis2027.finalAdjustment + eventAdjustment + structuredAdjustment));
       const score = Math.max(0, Math.min(100, baseScore + combinedThesisAdjustment));
       const eligibleForNewCapital =
         (item.action === 'AUMENTAR' || item.action === 'COMPRAR_EN_PULLBACK')
@@ -78,6 +79,7 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
       if (combinedThesisAdjustment > 0) notes.push(`Tesis 2027 favorece este activo (+${combinedThesisAdjustment}).`);
       if (liveThesis2027.dynamicAdjustment !== 0) notes.push(`Tesis viva: ajuste fundamental/mercado ${liveThesis2027.dynamicAdjustment > 0 ? '+' : ''}${liveThesis2027.dynamicAdjustment}.`);
       if (eventAdjustment !== 0) notes.push(`Eventos/catalizadores: ajuste ${eventAdjustment > 0 ? '+' : ''}${eventAdjustment}.`);
+      if (structuredAdjustment !== 0) notes.push(`Señales estructuradas: ajuste ${structuredAdjustment > 0 ? '+' : ''}${structuredAdjustment}.`);
       if (thesis2027.blocksNewCapital) notes.push('Tesis 2027 bloquea nuevo capital para este activo.');
 
       return {
@@ -100,6 +102,9 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         thesis2027Catalysts: item.thesis2027Catalysts,
         thesis2027EventRisks: item.thesis2027EventRisks,
         thesis2027UpcomingEarningsDate: item.thesis2027UpcomingEarningsDate,
+        thesis2027StructuredAdjustment: item.thesis2027StructuredAdjustment,
+        thesis2027StructuredCoverage: item.thesis2027StructuredCoverage,
+        thesis2027StructuredSignals: item.thesis2027StructuredSignals,
         signalPriorityLevel: item.signalPriorityLevel,
         signalPriorityScore: item.signalPriorityScore,
         marketRegime: item.marketRegime,

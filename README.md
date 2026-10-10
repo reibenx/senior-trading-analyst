@@ -127,3 +127,14 @@ Estados:
 - `INSUFFICIENT`: no hay cobertura suficiente para alterar la tesis.
 
 La capa dinámica sólo se aplica a activos pertenecientes al universo temático explícito de la Tesis 2027. Activos fuera de ese universo permanecen neutrales y no reciben ajuste estratégico por tener buenos scores generales.
+
+
+### Eventos y catalizadores de la Tesis 2027
+
+La capa viva incorpora ahora una segunda fuente de evidencia basada en eventos. Para los activos del universo explícito de la tesis, cuando reciben análisis completo se consultan noticias recientes y calendario de earnings mediante el proveedor de insights configurado. El resultado queda almacenado junto con la oportunidad en cache, evitando repetir consultas en cada lectura del ranking.
+
+Reglas principales:
+- Noticias de hasta 14 días y relevancia mínima suficiente pueden aportar un ajuste entre -2 y +2.
+- Earnings próximos no se interpretan direccionalmente. Si faltan 7 días o menos, se aplica una penalización de volatilidad de -1; entre 8 y 30 días se registra sólo como catalizador a monitorear.
+- La evidencia de eventos nunca sustituye la tesis fundamental: su impacto está limitado y el ajuste estratégico total permanece acotado entre -10 y +10.
+- Si no hay evidencia usable, el estado es `INSUFFICIENT` y el ajuste de eventos es 0.

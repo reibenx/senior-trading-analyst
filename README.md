@@ -149,3 +149,17 @@ La tesis incorpora cuatro canales heurísticos y auditables sobre evidencia ya d
 - `CAPEX_AI`: detecta aceleración o recorte explícito de capex, infraestructura IA, data centers o demanda GPU/IA.
 
 Cada canal aporta como máximo +1 o -1; el agregado estructurado está acotado entre -3 y +3. Las reglas son determinísticas y guardan la evidencia textual que disparó cada señal.
+
+
+### Historial y cambio de régimen de Tesis 2027
+
+La app persiste hasta 24 observaciones por ticker durante 90 días. Cada observación registra el ajuste estratégico final, estado de evidencia, estado de eventos y contribuciones dinámica, de eventos y estructurada.
+
+Se deriva una tendencia:
+- `STRENGTHENING`: el ajuste sube 2 puntos o más frente a la observación anterior.
+- `STABLE`: variación menor a 2 puntos.
+- `WEAKENING`: el ajuste cae 2 puntos o más.
+
+También se marca `regimeChanged` cuando cambia el estado de evidencia, por ejemplo `CONFIRMED → WEAK`. Un cambio de régimen o una variación absoluta de 3 puntos o más genera una señal estratégica del monitor, con deduplicación y notificación por los proveedores configurados.
+
+El historial completo puede consultarse por ticker en `GET /api/thesis-2027/history?symbol=TSM`.

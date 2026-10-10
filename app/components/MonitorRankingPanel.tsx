@@ -188,6 +188,8 @@ export function MonitorRankingPanel() {
                     <span>
                       {item.thesis2027Stance.replaceAll('_', ' ')}
                       {item.thesis2027Adjustment ? ` · ${item.thesis2027Adjustment > 0 ? '+' : ''}${item.thesis2027Adjustment}` : ''}
+                      {item.thesis2027EvidenceStatus ? ` · ${item.thesis2027EvidenceStatus}` : ''}
+                      {item.thesis2027DynamicAdjustment ? ` · dyn ${item.thesis2027DynamicAdjustment > 0 ? '+' : ''}${item.thesis2027DynamicAdjustment}` : ''}
                     </span>
                   </div>
                 ) : null}

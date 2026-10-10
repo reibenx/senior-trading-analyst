@@ -93,3 +93,8 @@ La rotación usa un cursor Redis independiente cuando Upstash está configurado.
 
 
 El historial del scanner conserva hasta 8 observaciones por activo durante 7 días en Redis. Un cambio de score de al menos +5 se clasifica como **ACCELERATING** y de -5 o menos como **DETERIORATING**; el resto queda **STABLE**. La UI de Oportunidades muestra esta señal junto con el score del scanner, delta y número de observaciones.
+
+
+### Scanner confirmation gate
+
+To reduce one-cycle false positives, scanner discoveries normally require repeated confirmation before the expensive full analysis. By default `MARKET_SCANNER_MIN_CONFIRMATIONS=2`. Candidates with `DETERIORATING` momentum are never promoted. Exceptionally strong candidates can use `MARKET_SCANNER_FAST_TRACK_SCORE=85` to bypass the confirmation count, provided they are not deteriorating. Promotion capacity remains bounded by `MARKET_SCANNER_PROMOTION_LIMIT`.

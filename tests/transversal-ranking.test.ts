@@ -186,6 +186,53 @@ describe('transversal ranking', () => {
     expect(second.sourceCounts.watchlist).toBe(1);
   });
 
+  it('carries scanner discovery momentum into new opportunities', () => {
+    const ranking = buildTransversalRanking({
+      opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
+      totalSymbols: 1,
+      portfolioFingerprint: 'abc',
+      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      discoveryBySymbol: new Map([['TSM', {
+        score: 79,
+        scoreDelta: 7,
+        observations: 3,
+        trend: 'ACCELERATING',
+      }]]),
+    });
+
+    expect(ranking.items[0].source).toBe('NEW_OPPORTUNITY');
+    expect(ranking.items[0].discoveryTrend).toBe('ACCELERATING');
+    expect(ranking.items[0].discoveryScore).toBe(79);
+    expect(ranking.items[0].discoveryScoreDelta).toBe(7);
+    expect(ranking.items[0].discoveryObservations).toBe(3);
+  });
+
+  it('retains discovery metadata when the scanner rotates away', () => {
+    const first = buildTransversalRanking({
+      opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
+      totalSymbols: 1,
+      portfolioFingerprint: 'abc',
+      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      discoveryBySymbol: new Map([['TSM', {
+        score: 79,
+        scoreDelta: 7,
+        observations: 3,
+        trend: 'ACCELERATING',
+      }]]),
+    });
+
+    const second = buildTransversalRanking({
+      opportunities: [opportunity({ symbol: 'TSM', opportunityScore: 84, currentWeightPercent: 0 })],
+      totalSymbols: 1,
+      portfolioFingerprint: 'abc',
+      sourceBySymbol: new Map([['TSM', 'SCANNER']]),
+      previousRanking: first,
+    });
+
+    expect(second.items[0].discoveryTrend).toBe('ACCELERATING');
+    expect(second.items[0].discoveryScore).toBe(79);
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

@@ -280,6 +280,29 @@ describe('transversal ranking', () => {
     expect(sndk?.eligibleForNewCapital).toBe(false);
   });
 
+  it('includes event catalysts in the live thesis adjustment', () => {
+    const ranking = buildTransversalRanking({
+      opportunities: [
+        opportunity({
+          symbol: 'TSM',
+          opportunityScore: 72,
+          currentWeightPercent: 0,
+          thesis2027EventStatus: 'POSITIVE',
+          thesis2027EventAdjustment: 2,
+          thesis2027EventCoverage: 100,
+          thesis2027Catalysts: ['Noticias recientes con sesgo positivo y relevancia suficiente.'],
+        }),
+      ],
+      totalSymbols: 1,
+      portfolioFingerprint: 'abc',
+    });
+
+    expect(ranking.items[0].thesis2027EventStatus).toBe('POSITIVE');
+    expect(ranking.items[0].thesis2027EventAdjustment).toBe(2);
+    expect(ranking.items[0].thesis2027Adjustment).toBe(10);
+    expect(ranking.items[0].notes.join(' ')).toContain('Eventos/catalizadores');
+  });
+
   it('blocks bullish new capital in defensive regime', () => {
     const defensive = opportunity({
       symbol: 'DEF',

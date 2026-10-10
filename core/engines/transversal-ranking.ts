@@ -1,4 +1,4 @@
-import type { PortfolioOpportunity, TransversalRankingSnapshot } from '@/core/domain/opportunity';
+import type { PortfolioOpportunity, ScannerDiscoveryTrend, TransversalRankingSnapshot } from '@/core/domain/opportunity';
 
 interface Input {
   opportunities: PortfolioOpportunity[];
@@ -6,6 +6,12 @@ interface Input {
   portfolioFingerprint: string;
   previousRanking?: TransversalRankingSnapshot | null;
   sourceBySymbol?: Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>;
+  discoveryBySymbol?: Map<string, {
+    score: number;
+    scoreDelta?: number;
+    observations: number;
+    trend: ScannerDiscoveryTrend;
+  }>;
 }
 
 function dataQuality(item: PortfolioOpportunity): 'FULL' | 'PARTIAL' | 'LIMITED' {
@@ -96,6 +102,8 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
             ? 'NEW_OPPORTUNITY' as const
             : 'WATCHLIST' as const;
 
+      const discovery = input.discoveryBySymbol?.get(item.symbol.toUpperCase());
+
       return {
         ...item,
         rank,
@@ -103,6 +111,10 @@ export function buildTransversalRanking(input: Input): TransversalRankingSnapsho
         rankChange,
         movement,
         source,
+        discoveryTrend: discovery?.trend,
+        discoveryScore: discovery?.score,
+        discoveryScoreDelta: discovery?.scoreDelta,
+        discoveryObservations: discovery?.observations,
       };
     });
 

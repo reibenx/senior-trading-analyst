@@ -13,6 +13,7 @@ import { getNotificationProviders } from '@/core/providers/notifications';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
 import { enrichOpportunityWithThesis2027Events } from '@/core/services/thesis-2027-events';
+import { getThesis2027Overlay } from '@/core/engines/thesis-2027';
 import { buildPortfolioOpportunity } from '@/core/engines/opportunity';
 import { buildTransversalRanking } from '@/core/engines/transversal-ranking';
 import { buildTechnicalSnapshot } from '@/core/engines/technical';
@@ -305,7 +306,7 @@ export async function POST(request: Request) {
         strategy: target.strategy,
         timeframe: DEFAULT_TIMEFRAME[target.strategy],
         includeSectorContext: false,
-        includeFundamentals: false,
+        includeFundamentals: !getThesis2027Overlay(target.symbol).themes.includes('OTHER'),
       });
 
       const plan = buildTradePlan({
@@ -317,7 +318,7 @@ export async function POST(request: Request) {
       });
 
       const rawOpportunity = buildPortfolioOpportunity(plan, positions);
-      const opportunity = await enrichOpportunityWithThesis2027Events(rawOpportunity);
+      const opportunity = await enrichOpportunityWithThesis2027Events(rawOpportunity, analysis.fundamentals);
       if (opportunityStore) {
         await opportunityStore
           .set(target.strategy, portfolioFingerprint, opportunity, portfolioOpportunityTtlSeconds(target.strategy))

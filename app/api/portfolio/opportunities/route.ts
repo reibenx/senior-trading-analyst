@@ -51,7 +51,7 @@ async function analyzeOne(symbol: string, strategy: Strategy, positions: Positio
     positions,
   });
   const opportunity = buildPortfolioOpportunity(plan, positions);
-  return enrichOpportunityWithThesis2027Events(opportunity);
+  return enrichOpportunityWithThesis2027Events(opportunity, analysis.fundamentals);
 }
 
 export async function POST(request: Request) {

@@ -144,6 +144,7 @@ export function Thesis2027Dashboard() {
                   <th>Estado evidencia</th>
                   <th>Dinámico</th>
                   <th>Eventos</th>
+                  <th>Señales estructuradas</th>
                   <th>Próx. earnings</th>
                   <th>Acción táctica</th>
                   <th>Racional</th>
@@ -180,6 +181,11 @@ export function Thesis2027Dashboard() {
                           {rank.thesis2027EventAdjustment ? ` ${rank.thesis2027EventAdjustment > 0 ? '+' : ''}${rank.thesis2027EventAdjustment}` : ''}
                         </span>
                       ) : '—'}
+                    </td>
+                    <td>
+                      {rank?.thesis2027StructuredSignals?.length
+                        ? rank.thesis2027StructuredSignals.map((signal) => `${signal.category} ${signal.direction > 0 ? '+' : '-'}1`).join(' · ')
+                        : '—'}
                     </td>
                     <td>{rank?.thesis2027UpcomingEarningsDate ?? '—'}</td>
                     <td>{rank?.action?.replaceAll('_', ' ') ?? '—'}</td>

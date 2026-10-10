@@ -138,3 +138,14 @@ Reglas principales:
 - Earnings próximos no se interpretan direccionalmente. Si faltan 7 días o menos, se aplica una penalización de volatilidad de -1; entre 8 y 30 días se registra sólo como catalizador a monitorear.
 - La evidencia de eventos nunca sustituye la tesis fundamental: su impacto está limitado y el ajuste estratégico total permanece acotado entre -10 y +10.
 - Si no hay evidencia usable, el estado es `INSUFFICIENT` y el ajuste de eventos es 0.
+
+
+### Señales estructuradas de Tesis 2027
+
+La tesis incorpora cuatro canales heurísticos y auditables sobre evidencia ya disponible:
+- `GUIDANCE`: detecta subas o recortes explícitos de guidance/outlook/forecast.
+- `ANALYST_REVISION`: detecta upgrades/downgrades o cambios explícitos de rating.
+- `PRICE_TARGET`: compara el precio objetivo de consenso disponible con el precio actual; >=20% de upside suma y <=-10% de downside resta.
+- `CAPEX_AI`: detecta aceleración o recorte explícito de capex, infraestructura IA, data centers o demanda GPU/IA.
+
+Cada canal aporta como máximo +1 o -1; el agregado estructurado está acotado entre -3 y +3. Las reglas son determinísticas y guardan la evidencia textual que disparó cada señal.

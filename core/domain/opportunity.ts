@@ -1,4 +1,5 @@
 import type { Decision, ScoreCard, Strategy, TradePlan } from '@/core/domain/trading';
+import type { Thesis2027Stance, Thesis2027Theme } from '@/core/domain/thesis-2027';
 
 export type PortfolioAction =
   | 'AUMENTAR'
@@ -116,6 +117,10 @@ export interface TransversalRankingItem {
   discoveryScore?: number;
   discoveryScoreDelta?: number;
   discoveryObservations?: number;
+  thesis2027Stance?: Thesis2027Stance;
+  thesis2027Themes?: Thesis2027Theme[];
+  thesis2027Adjustment?: number;
+  thesis2027Rationale?: string;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

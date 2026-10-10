@@ -146,6 +146,17 @@ export interface TransversalRankingSourceCounts {
   newOpportunities: number;
 }
 
+export interface ScannerDiscoveryRankingItem {
+  rank: number;
+  symbol: string;
+  score: number;
+  priority: number;
+  trend: ScannerDiscoveryTrend;
+  scoreDelta?: number;
+  observations: number;
+  promoted: boolean;
+}
+
 export interface TransversalRankingSnapshot {
   generatedAt: string;
   previousGeneratedAt?: string;
@@ -155,6 +166,7 @@ export interface TransversalRankingSnapshot {
   totalSymbols: number;
   coveragePercent: number;
   sourceCounts: TransversalRankingSourceCounts;
+  discoveryRanking?: ScannerDiscoveryRankingItem[];
   items: TransversalRankingItem[];
   notes: string[];
 }

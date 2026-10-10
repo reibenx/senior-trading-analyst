@@ -14,6 +14,7 @@ import {
 } from '@/core/persistence/portfolio-opportunity-store';
 import { analyzeSymbol } from '@/core/services/analyze-symbol';
 import { buildTradePlan } from '@/core/services/build-trade-plan';
+import { enrichOpportunityWithThesis2027Events } from '@/core/services/thesis-2027-events';
 
 const requestSchema = z.object({
   strategy: z.enum(['day', 'swing', 'position']).default('position'),
@@ -49,7 +50,8 @@ async function analyzeOne(symbol: string, strategy: Strategy, positions: Positio
     marketContext: analysis.marketContext,
     positions,
   });
-  return buildPortfolioOpportunity(plan, positions);
+  const opportunity = buildPortfolioOpportunity(plan, positions);
+  return enrichOpportunityWithThesis2027Events(opportunity);
 }
 
 export async function POST(request: Request) {

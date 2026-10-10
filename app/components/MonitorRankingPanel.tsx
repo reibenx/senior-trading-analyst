@@ -193,6 +193,8 @@ export function MonitorRankingPanel() {
                       {item.thesis2027EventStatus ? ` · evt ${item.thesis2027EventStatus}` : ''}
                       {item.thesis2027EventAdjustment ? ` ${item.thesis2027EventAdjustment > 0 ? '+' : ''}${item.thesis2027EventAdjustment}` : ''}
                       {item.thesis2027StructuredAdjustment ? ` · struct ${item.thesis2027StructuredAdjustment > 0 ? '+' : ''}${item.thesis2027StructuredAdjustment}` : ''}
+                      {item.thesis2027HistoryTrend ? ` · ${item.thesis2027HistoryTrend}` : ''}
+                      {item.thesis2027AdjustmentDelta !== undefined ? ` ${item.thesis2027AdjustmentDelta > 0 ? '+' : ''}${item.thesis2027AdjustmentDelta}` : ''}
                     </span>
                   </div>
                 ) : null}

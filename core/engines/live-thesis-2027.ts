@@ -25,6 +25,16 @@ export function assessLiveThesis2027(
   overlay: Thesis2027Overlay,
   evidence: Thesis2027EvidenceInput,
 ): LiveThesis2027Assessment {
+  if (overlay.themes.includes('OTHER')) {
+    return {
+      status: 'INSUFFICIENT',
+      dynamicAdjustment: 0,
+      finalAdjustment: overlay.strategicAdjustment,
+      evidenceCoverage: 0,
+      reasons: ['Activo fuera del universo temático explícito de la tesis 2027.'],
+    };
+  }
+
   const values = [
     evidence.fundamentalScore,
     evidence.valuationScore,

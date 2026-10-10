@@ -253,8 +253,10 @@ describe('transversal ranking', () => {
     const xyz = ranking.items.find((item) => item.symbol === 'XYZ');
 
     expect(tsm?.thesis2027Stance).toBe('PRIORITY_ACCUMULATE');
-    expect(tsm?.thesis2027Adjustment).toBe(8);
-    expect(tsm?.adjustedScore).toBe((xyz?.adjustedScore ?? 0) + 8);
+    expect(tsm?.thesis2027Adjustment).toBe(10);
+    expect(tsm?.thesis2027EvidenceStatus).toBe('CONFIRMED');
+    expect(tsm?.thesis2027DynamicAdjustment).toBe(3);
+    expect(tsm?.adjustedScore).toBe((xyz?.adjustedScore ?? 0) + 10);
     expect(ranking.items[0].symbol).toBe('TSM');
   });
 
@@ -274,7 +276,7 @@ describe('transversal ranking', () => {
     expect(vst?.thesis2027Stance).toBe('HOLD');
     expect(vst?.eligibleForNewCapital).toBe(false);
     expect(sndk?.thesis2027Stance).toBe('DO_NOT_ADD');
-    expect(sndk?.thesis2027Adjustment).toBe(-8);
+    expect(sndk?.thesis2027Adjustment).toBe(-5);
     expect(sndk?.eligibleForNewCapital).toBe(false);
   });
 

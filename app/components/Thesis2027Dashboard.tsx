@@ -141,6 +141,8 @@ export function Thesis2027Dashboard() {
                   <th>Peso cartera</th>
                   <th>Ranking actual</th>
                   <th>Score ajustado</th>
+                  <th>Estado evidencia</th>
+                  <th>Dinámico</th>
                   <th>Acción táctica</th>
                   <th>Racional</th>
                 </tr>
@@ -157,8 +159,23 @@ export function Thesis2027Dashboard() {
                     <td>{weight > 0 ? `${weight.toFixed(1)}%` : '—'}</td>
                     <td>{rank ? `#${rank.rank}` : '—'}</td>
                     <td>{rank?.adjustedScore ?? '—'}</td>
+                    <td>
+                      {rank?.thesis2027EvidenceStatus ? (
+                        <span className={`thesisEvidence thesis-evidence-${rank.thesis2027EvidenceStatus.toLowerCase()}`}>
+                          {rank.thesis2027EvidenceStatus}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {rank?.thesis2027DynamicAdjustment !== undefined
+                        ? `${rank.thesis2027DynamicAdjustment > 0 ? '+' : ''}${rank.thesis2027DynamicAdjustment}`
+                        : '—'}
+                    </td>
                     <td>{rank?.action?.replaceAll('_', ' ') ?? '—'}</td>
-                    <td>{profile.rationale}</td>
+                    <td>
+                      {profile.rationale}
+                      {rank?.thesis2027EvidenceReasons?.[0] ? ` · ${rank.thesis2027EvidenceReasons[0]}` : ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>

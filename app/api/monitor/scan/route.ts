@@ -18,10 +18,17 @@ import { buildTechnicalSnapshot } from '@/core/engines/technical';
 import {
   marketScannerBatchSize,
   marketScannerEnabled,
+  marketScannerPromotionLimit,
   marketScannerThreshold,
   parseScannerUniverse,
   preScoreTechnicalCandidate,
+  scannerDiscoveryPriority,
 } from '@/core/monitoring/market-scanner';
+import {
+  buildScannerDiscoveryState,
+  getScannerHistoryStore,
+  type ScannerDiscoveryState,
+} from '@/core/monitoring/scanner-history-store';
 import { appendActivity } from '@/core/persistence/activity-store';
 import {
   buildPortfolioFingerprint,
@@ -116,8 +123,9 @@ export async function POST(request: Request) {
     enabled: marketScannerEnabled(),
     universeSize: 0,
     inspected: 0,
-    promoted: [] as Array<{ symbol: string; score: number; reasons: string[] }>,
-    rejected: [] as Array<{ symbol: string; score: number }>,
+    promoted: [] as Array<{ symbol: string; score: number; reasons: string[]; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
+    rejected: [] as Array<{ symbol: string; score: number; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
+    ranked: [] as Array<{ symbol: string; score: number; priority: number; trend: ScannerDiscoveryState['trend']; scoreDelta?: number; observations: number }>,
   };
 
   const scannerTargets: ScanTarget[] = [];
@@ -135,6 +143,13 @@ export async function POST(request: Request) {
       : 0;
     const candidates = circularSlice(scannerUniverse, scannerStart, scannerBatch);
     const threshold = marketScannerThreshold();
+    const promotionLimit = marketScannerPromotionLimit();
+    const historyStore = getScannerHistoryStore();
+    const inspectedCandidates: Array<{
+      candidate: ReturnType<typeof preScoreTechnicalCandidate>;
+      discovery: ScannerDiscoveryState;
+      priority: number;
+    }> = [];
 
     for (const symbol of candidates) {
       try {
@@ -149,15 +164,68 @@ export async function POST(request: Request) {
           bars,
         });
         const candidate = preScoreTechnicalCandidate(symbol, snapshot, portfolioStrategy);
-        scannerSummary.inspected += 1;
-        if (candidate.score >= threshold) {
-          scannerTargets.push({ symbol, strategy: portfolioStrategy, source: 'SCANNER' });
-          scannerSummary.promoted.push({ symbol, score: candidate.score, reasons: candidate.reasons });
-        } else {
-          scannerSummary.rejected.push({ symbol, score: candidate.score });
+        const observedAt = new Date().toISOString();
+        const history = historyStore
+          ? await historyStore.get(portfolioStrategy, symbol).catch(() => null)
+          : null;
+        const discovery = buildScannerDiscoveryState(
+          symbol,
+          portfolioStrategy,
+          candidate.score,
+          history,
+        );
+        if (historyStore) {
+          await historyStore
+            .append(portfolioStrategy, symbol, candidate.score, observedAt)
+            .catch(() => undefined);
         }
+        inspectedCandidates.push({
+          candidate,
+          discovery,
+          priority: scannerDiscoveryPriority(discovery),
+        });
+        scannerSummary.inspected += 1;
       } catch {
         scannerSummary.inspected += 1;
+      }
+    }
+
+    inspectedCandidates.sort((a, b) => b.priority - a.priority);
+    scannerSummary.ranked = inspectedCandidates.map(({ candidate, discovery, priority }) => ({
+      symbol: candidate.symbol,
+      score: candidate.score,
+      priority,
+      trend: discovery.trend,
+      scoreDelta: discovery.scoreDelta,
+      observations: discovery.observations,
+    }));
+
+    const promotedSymbols = new Set(
+      inspectedCandidates
+        .filter(({ candidate }) => candidate.score >= threshold)
+        .slice(0, promotionLimit)
+        .map(({ candidate }) => candidate.symbol),
+    );
+
+    for (const { candidate, discovery } of inspectedCandidates) {
+      if (promotedSymbols.has(candidate.symbol)) {
+        scannerTargets.push({ symbol: candidate.symbol, strategy: portfolioStrategy, source: 'SCANNER' });
+        scannerSummary.promoted.push({
+          symbol: candidate.symbol,
+          score: candidate.score,
+          reasons: candidate.reasons,
+          trend: discovery.trend,
+          scoreDelta: discovery.scoreDelta,
+          observations: discovery.observations,
+        });
+      } else {
+        scannerSummary.rejected.push({
+          symbol: candidate.symbol,
+          score: candidate.score,
+          trend: discovery.trend,
+          scoreDelta: discovery.scoreDelta,
+          observations: discovery.observations,
+        });
       }
     }
   }
@@ -172,6 +240,20 @@ export async function POST(request: Request) {
   ]);
 
   const sourceBySymbol = new Map<string, 'PORTFOLIO' | 'WATCHLIST' | 'SCANNER'>();
+  const discoveryBySymbol = new Map<string, {
+    score: number;
+    scoreDelta?: number;
+    observations: number;
+    trend: ScannerDiscoveryState['trend'];
+  }>();
+  for (const item of scannerSummary.ranked) {
+    discoveryBySymbol.set(item.symbol, {
+      score: item.score,
+      scoreDelta: item.scoreDelta,
+      observations: item.observations,
+      trend: item.trend,
+    });
+  }
   for (const target of rankingTargets) {
     sourceBySymbol.set(
       target.symbol,
@@ -273,6 +355,7 @@ export async function POST(request: Request) {
         portfolioFingerprint,
         previousRanking: previousTransversalRanking,
         sourceBySymbol,
+        discoveryBySymbol,
       });
 
       const rankingTtlSeconds = Math.max(

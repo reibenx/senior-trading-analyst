@@ -4,6 +4,7 @@ import {
   parseScannerUniverse,
   preScoreTechnicalCandidate,
   scannerDiscoveryPriority,
+  scannerPromotionEligible,
 } from '../core/monitoring/market-scanner';
 import { buildScannerDiscoveryState } from '../core/monitoring/scanner-history-store';
 
@@ -57,6 +58,30 @@ describe('market scanner', () => {
     expect(accelerating.scoreDelta).toBe(7);
     expect(accelerating.observations).toBe(3);
     expect(scannerDiscoveryPriority(accelerating)).toBeGreaterThan(scannerDiscoveryPriority(stable));
+  });
+
+  it('requires temporal confirmation unless the score qualifies for fast-track', () => {
+    const firstObservation = buildScannerDiscoveryState('AAA', 'position', 78, null);
+    const confirmed = buildScannerDiscoveryState('BBB', 'position', 78, {
+      symbol: 'BBB',
+      strategy: 'position',
+      observations: [{ score: 76, observedAt: '2026-10-09T13:00:00.000Z' }],
+    });
+    const fastTrack = buildScannerDiscoveryState('CCC', 'position', 88, null);
+
+    expect(scannerPromotionEligible(firstObservation, 66, 2, 85)).toBe(false);
+    expect(scannerPromotionEligible(confirmed, 66, 2, 85)).toBe(true);
+    expect(scannerPromotionEligible(fastTrack, 66, 2, 85)).toBe(true);
+  });
+
+  it('never promotes a deteriorating candidate even above the score threshold', () => {
+    const deteriorating = buildScannerDiscoveryState('AAA', 'position', 78, {
+      symbol: 'AAA',
+      strategy: 'position',
+      observations: [{ score: 86, observedAt: '2026-10-09T13:00:00.000Z' }],
+    });
+    expect(deteriorating.trend).toBe('DETERIORATING');
+    expect(scannerPromotionEligible(deteriorating, 66, 2, 85)).toBe(false);
   });
 
   it('classifies a meaningful score deterioration', () => {

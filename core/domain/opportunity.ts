@@ -104,6 +104,7 @@ export interface PortfolioRankingSnapshot {
 
 export type RankingMovement = 'NEW' | 'UP' | 'DOWN' | 'UNCHANGED';
 export type OpportunityUniverseSource = 'PORTFOLIO' | 'WATCHLIST' | 'NEW_OPPORTUNITY';
+export type ScannerDiscoveryTrend = 'ACCELERATING' | 'STABLE' | 'DETERIORATING';
 
 export interface TransversalRankingItem {
   rank: number;
@@ -111,6 +112,10 @@ export interface TransversalRankingItem {
   rankChange?: number;
   movement: RankingMovement;
   source: OpportunityUniverseSource;
+  discoveryTrend?: ScannerDiscoveryTrend;
+  discoveryScore?: number;
+  discoveryScoreDelta?: number;
+  discoveryObservations?: number;
   symbol: string;
   strategy: Strategy;
   action: PortfolioAction;

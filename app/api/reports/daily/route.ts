@@ -8,7 +8,7 @@ import {
   buildPortfolioFingerprint,
   getPortfolioOpportunityStore,
 } from '@/core/persistence/portfolio-opportunity-store';
-import { buildDailyPortfolioReport } from '@/core/services/daily-portfolio-report';
+import { buildDailyPortfolioReport, buildWhatsAppDailyBrief } from '@/core/services/daily-portfolio-report';
 
 function authorized(request: Request): boolean {
   const expected = process.env.MONITOR_CRON_TOKEN?.trim();
@@ -74,6 +74,7 @@ export async function POST(request: Request) {
 
   const generatedAt = new Date();
   const report = buildDailyPortfolioReport(positions, assets, generatedAt);
+  const whatsappBrief = buildWhatsAppDailyBrief(positions, assets, generatedAt);
 
   const whatsapp = getWhatsAppProvider();
   const telegram = getTelegramProvider();
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
 
   if (whatsapp) {
     try {
-      await whatsapp.sendDailyReport(report);
+      await whatsapp.sendDailyReport(whatsapp.dailyTemplateConfigured ? whatsappBrief : report);
       deliveries.push({ provider: whatsapp.id, ok: true });
     } catch (error) {
       deliveries.push({
@@ -121,6 +122,7 @@ export async function POST(request: Request) {
     generatedAt: generatedAt.toISOString(),
     symbols,
     report,
+    whatsappBrief,
     deliveries,
   }, { status: delivered ? 200 : 503 });
 }

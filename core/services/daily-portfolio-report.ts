@@ -34,6 +34,7 @@ export function buildDailyPortfolioReport(
   positions: Position[],
   assets: DailyReportAsset[],
   generatedAt: Date,
+  maxLength = 3900,
 ) {
   const total = positions.reduce((sum, p) => sum + Math.max(0, p.marketValue ?? 0), 0);
   const top = [...assets].sort((a, b) => b.weightPercent - a.weightPercent).slice(0, 5);
@@ -98,5 +99,61 @@ export function buildDailyPortfolioReport(
   }
 
   lines.push('', 'Generado automáticamente. Revisar antes de ejecutar operaciones.');
-  return lines.join('\n').slice(0, 3900);
+  return lines.join('\n').slice(0, Math.max(300, maxLength));
+}
+
+
+export function buildWhatsAppDailyBrief(
+  positions: Position[],
+  assets: DailyReportAsset[],
+  generatedAt: Date,
+) {
+  const total = positions.reduce((sum, p) => sum + Math.max(0, p.marketValue ?? 0), 0);
+  const ranked = assets
+    .filter((item) => item.ranking)
+    .sort((a, b) => (b.ranking?.adjustedScore ?? 0) - (a.ranking?.adjustedScore ?? 0));
+
+  const leader = ranked[0];
+  const topTechnical = ranked.slice(0, 3);
+  const thesisShift = ranked.find((item) =>
+    item.ranking?.thesis2027HistoryTrend === 'WEAKENING'
+    || item.ranking?.thesis2027HistoryTrend === 'STRENGTHENING'
+  );
+
+  const news = assets.flatMap((asset) =>
+    materialNews(asset.news).map((item) => ({ symbol: asset.symbol, item })),
+  ).sort((a, b) => (b.item.relevance ?? 0) - (a.item.relevance ?? 0)).slice(0, 2);
+
+  const lines = [
+    `📊 Senior Trading Analyst · ${generatedAt.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Catamarca' })}`,
+    `Cartera: ${positions.filter((p) => p.quantity > 0).length} posiciones${total > 0 ? ` · ${total.toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : ''}`,
+  ];
+
+  if (leader?.ranking) {
+    lines.push(`🎯 #1 ${leader.symbol}: ${leader.ranking.adjustedScore}/100 · ${leader.ranking.action.replaceAll('_', ' ')}`);
+  }
+
+  for (const item of topTechnical) {
+    const r = item.ranking!;
+    const f = item.fundamentals;
+    lines.push(
+      `• ${item.symbol}: Tec ${r.technicalScore} · Conv ${r.conviction} · Val ${r.valuationScore}`
+      + (f?.revenueGrowthYoY !== undefined ? ` · Rev ${(f.revenueGrowthYoY * 100).toFixed(0)}%` : '')
+      + (f?.earningsGrowthYoY !== undefined ? ` · EPS ${(f.earningsGrowthYoY * 100).toFixed(0)}%` : ''),
+    );
+  }
+
+  if (thesisShift?.ranking?.thesis2027HistoryTrend) {
+    lines.push(
+      `${thesisShift.ranking.thesis2027HistoryTrend === 'WEAKENING' ? '🔴' : '🟢'} Tesis 2027: ${thesisShift.symbol} ${thesisShift.ranking.thesis2027HistoryTrend}`,
+    );
+  }
+
+  for (const { symbol, item } of news) {
+    lines.push(`📰 ${symbol}: ${item.title}`);
+  }
+
+  if (!news.length) lines.push('📰 Sin noticias de alta relevancia detectadas.');
+
+  return lines.join('\n').slice(0, 900);
 }

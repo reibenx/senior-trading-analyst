@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getExecutionPolicy } from '@/core/execution/execution-policy';
 import { getRedisRestConfig } from '@/core/persistence/redis-env';
+import { getWhatsAppConfigurationStatus } from '@/core/providers/whatsapp-notifications';
 
 function configured(...names: string[]) {
   return names.every((name) => Boolean(process.env[name]?.trim()));
@@ -24,6 +25,7 @@ export async function GET() {
   const ratioReady = ratioMode === 'bridge' ? configured('CEDEAR_RATIO_BRIDGE_URL') : true;
   const compositeCedear = ratioReady && quoteAvailable;
   const executionPolicy = getExecutionPolicy();
+  const whatsappStatus = getWhatsAppConfigurationStatus();
   const orderBridgeReady = Boolean(process.env.IOL_ORDER_BRIDGE_URL?.trim() || process.env.IOL_BRIDGE_URL?.trim());
   const confirmationSecretReady = (process.env.ORDER_CONFIRMATION_SECRET?.trim().length ?? 0) >= 24;
 
@@ -77,7 +79,22 @@ export async function GET() {
     },
     alertState: { ready: redisReady, mode: redisReady ? redis?.source : 'unconfigured' },
     telegram: { ready: configured('TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID') },
-    whatsapp: { ready: configured('WHATSAPP_ACCESS_TOKEN', 'WHATSAPP_PHONE_NUMBER_ID', 'WHATSAPP_RECIPIENT') },
+    whatsapp: {
+      ready: whatsappStatus.ready,
+      mode: whatsappStatus.dailyReportReady ? 'cloud-api + daily-template' : whatsappStatus.ready ? 'cloud-api' : 'unconfigured',
+      purpose: whatsappStatus.ready
+        ? whatsappStatus.dailyReportReady
+          ? 'alertas + reportes diarios proactivos'
+          : 'alertas disponibles; falta plantilla aprobada para reportes diarios proactivos'
+        : `faltan variables: ${whatsappStatus.missing.join(', ')}`,
+    },
+    dailyReport: {
+      ready: whatsappStatus.dailyReportReady,
+      mode: whatsappStatus.dailyReportReady ? 'whatsapp-template' : 'pending-template',
+      purpose: whatsappStatus.dailyReportReady
+        ? 'reporte diario técnico, fundamental, tesis 2027 y noticias relevantes'
+        : 'requiere WhatsApp configurado + WHATSAPP_DAILY_TEMPLATE_NAME aprobado en Meta',
+    },
     monitorCron: { ready: configured('MONITOR_CRON_TOKEN') },
   };
 

@@ -1,0 +1,24 @@
+name: Daily Portfolio Report
+
+on:
+  schedule:
+    - cron: '30 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Send daily portfolio report
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          MONITOR_CRON_TOKEN: ${{ secrets.MONITOR_CRON_TOKEN }}
+        run: |
+          if [ -z "$APP_BASE_URL" ] || [ -z "$MONITOR_CRON_TOKEN" ]; then
+            echo "Daily report secrets are not configured; skipping."
+            exit 0
+          fi
+
+          BASE="${APP_BASE_URL%/}"
+          curl --fail-with-body --silent --show-error             --max-time 540             -X POST "$BASE/api/reports/daily"             -H "Authorization: Bearer $MONITOR_CRON_TOKEN"             -H "Content-Type: application/json"

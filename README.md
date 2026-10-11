@@ -163,3 +163,17 @@ Se deriva una tendencia:
 También se marca `regimeChanged` cuando cambia el estado de evidencia, por ejemplo `CONFIRMED → WEAK`. Un cambio de régimen o una variación absoluta de 3 puntos o más genera una señal estratégica del monitor, con deduplicación y notificación por los proveedores configurados.
 
 El historial completo puede consultarse por ticker en `GET /api/thesis-2027/history?symbol=TSM`.
+
+
+## Reporte diario por WhatsApp
+
+El sistema genera un brief diario a las 08:30 hora Argentina mediante GitHub Actions (`30 11 * * *` UTC). El reporte combina:
+- composición y prioridad actual de cartera;
+- técnico, convicción, régimen y acción por las principales posiciones;
+- crecimiento de ingresos/EPS, forward P/E, target y score de valoración;
+- cambios de Tesis 2027;
+- hasta tres noticias de alta relevancia para las posiciones principales.
+
+El canal principal es WhatsApp Cloud API. Para envíos proactivos fuera de la ventana de 24 horas de Meta se soporta una plantilla aprobada mediante `WHATSAPP_DAILY_TEMPLATE_NAME` y `WHATSAPP_DAILY_TEMPLATE_LANGUAGE`. Si WhatsApp falla o no está disponible, el endpoint usa Telegram como fallback cuando está configurado. `DAILY_REPORT_TELEGRAM=true` permite duplicar el brief también por Telegram.
+
+La pantalla Estado del Sistema informa qué variables de WhatsApp faltan sin exponer sus valores y separa readiness del canal de readiness para reportes diarios.

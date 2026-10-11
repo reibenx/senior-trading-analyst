@@ -41,6 +41,7 @@ function moduleLabel(key: string) {
     alertState: 'Estado de alertas / Redis',
     telegram: 'Telegram',
     whatsapp: 'WhatsApp',
+    dailyReport: 'Reporte diario',
     monitorCron: 'Monitor 24/7',
   };
   return labels[key] ?? key;
